@@ -182,6 +182,7 @@ const MapComponent: React.FC<MapComponentProps> = ({
   const isDraggingRef = useRef(false);
   const draggedRef = useRef(false);
   const dragStartPosRef = useRef<Cesium.Cartesian2 | null>(null);
+  const hasInitialZoomedRef = useRef(false);
 
   // Use refs for callbacks and markers to avoid re-initializing the viewer unnecessarily
   const onMarkerClickRef = useRef(onMarkerClick);
@@ -193,6 +194,61 @@ const MapComponent: React.FC<MapComponentProps> = ({
     onUpdatePositionRef.current = onUpdatePosition;
     markersRef.current = markers;
   }, [onMarkerClick, onUpdatePosition, markers]);
+
+  const zoomToMarkers = useCallback((markersToFit: PlantMarker[]) => {
+    if (!viewerRef.current || markersToFit.length === 0) return;
+    
+    const viewer = viewerRef.current;
+    
+    const lons = markersToFit.map(m => m.longitude);
+    const lats = markersToFit.map(m => m.latitude);
+    
+    const west = Math.min(...lons);
+    const east = Math.max(...lons);
+    const south = Math.min(...lats);
+    const north = Math.max(...lats);
+    
+    const centerLon = (west + east) / 2;
+    const centerLat = (south + north) / 2;
+    
+    const lonSpan = east - west;
+    const latSpan = north - south;
+    const maxSpan = Math.max(lonSpan, latSpan, 0.001);
+    
+    // Create a bounding sphere around the markers
+    const centerCartesian = Cesium.Cartesian3.fromDegrees(centerLon, centerLat);
+    // Radius heuristic: convert degrees to meters roughly (1 deg ~ 111km)
+    const radius = Math.max(maxSpan * 60000, 100); 
+    const boundingSphere = new Cesium.BoundingSphere(centerCartesian, radius);
+
+    // 1. Teleport to high top-down view of the markers
+    viewer.camera.setView({
+      destination: Cesium.Cartesian3.fromDegrees(centerLon, centerLat, radius * 10),
+      orientation: {
+        heading: 0,
+        pitch: Cesium.Math.toRadians(-90),
+        roll: 0
+      }
+    });
+
+    // 2. Animate to lower tilted view to showcase movement
+    viewer.camera.flyToBoundingSphere(boundingSphere, {
+      offset: new Cesium.HeadingPitchRange(
+        Cesium.Math.toRadians(0),
+        Cesium.Math.toRadians(-35), // Tilted view
+        radius * 3.5 // Range (distance from center)
+      ),
+      duration: 4.0,
+      easingFunction: Cesium.EasingFunction.CUBIC_IN_OUT
+    });
+  }, [viewerRef]);
+
+  useEffect(() => {
+    if (isMapLoaded && markers.length > 0 && !hasInitialZoomedRef.current) {
+      zoomToMarkers(markers);
+      hasInitialZoomedRef.current = true;
+    }
+  }, [isMapLoaded, markers, zoomToMarkers]);
 
   // Global mouseup listener to ensure drag state is cleared even if released outside canvas
   useEffect(() => {
@@ -299,12 +355,12 @@ const MapComponent: React.FC<MapComponentProps> = ({
         });
         // ---------------------------
 
-        // Set initial view to focus on the Annexe with main building to the left
+        // Set initial view to a high top-down perspective
         viewer.camera.setView({
-          destination: Cesium.Cartesian3.fromDegrees(INITIAL_CENTER.lng, INITIAL_CENTER.lat, 350),
+          destination: Cesium.Cartesian3.fromDegrees(INITIAL_CENTER.lng, INITIAL_CENTER.lat, 2000),
           orientation: {
-            heading: Cesium.Math.toRadians(0), // Looking North
-            pitch: Cesium.Math.toRadians(-45),
+            heading: Cesium.Math.toRadians(0),
+            pitch: Cesium.Math.toRadians(-90),
             roll: 0.0
           }
         });
