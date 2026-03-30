@@ -37,6 +37,7 @@ interface MapComponentProps {
   deleteMarker: (id: string) => void;
   viewerRef: React.MutableRefObject<Cesium.Viewer | null>;
   canEdit?: boolean;
+  onAnimationComplete?: () => void;
 }
 
 const MarkerOverlay: React.FC<{
@@ -81,11 +82,14 @@ const MarkerOverlay: React.FC<{
         const cameraPosition = viewer.camera.position;
         const cameraDirection = viewer.camera.direction;
         const toPoint = Cesium.Cartesian3.subtract(floatingPos, cameraPosition, new Cesium.Cartesian3());
+        const distance = Cesium.Cartesian3.distance(cameraPosition, floatingPos);
         const isVisible = Cesium.Cartesian3.dot(cameraDirection, toPoint) > 0;
 
         if (screenPos && screenGroundPos && isVisible) {
           el.style.display = 'block';
           el.style.transform = `translate3d(${screenPos.x}px, ${screenPos.y}px, 0) translate(-50%, -50%)`;
+          // Set z-index based on distance (closer = higher)
+          el.style.zIndex = Math.round(1000000 - distance).toString();
           
           // Update tether line
           const line = el.querySelector('.tether-line') as HTMLDivElement;
@@ -173,7 +177,8 @@ const MapComponent: React.FC<MapComponentProps> = ({
   onUpdatePosition,
   deleteMarker,
   viewerRef,
-  canEdit = false
+  canEdit = false,
+  onAnimationComplete
 }) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const [viewerReady, setViewerReady] = useState(false);
@@ -196,32 +201,38 @@ const MapComponent: React.FC<MapComponentProps> = ({
   }, [onMarkerClick, onUpdatePosition, markers]);
 
   const zoomToMarkers = useCallback((markersToFit: PlantMarker[]) => {
-    if (!viewerRef.current || markersToFit.length === 0) return;
+    if (!viewerRef.current) return;
     
     const viewer = viewerRef.current;
     
-    const lons = markersToFit.map(m => m.longitude);
-    const lats = markersToFit.map(m => m.latitude);
+    let centerLon = INITIAL_CENTER.lng;
+    let centerLat = INITIAL_CENTER.lat;
+    let radius = 200; // Default radius if no markers
+
+    if (markersToFit.length > 0) {
+      const lons = markersToFit.map(m => m.longitude);
+      const lats = markersToFit.map(m => m.latitude);
+      
+      const west = Math.min(...lons);
+      const east = Math.max(...lons);
+      const south = Math.min(...lats);
+      const north = Math.max(...lats);
+      
+      centerLon = (west + east) / 2;
+      centerLat = (south + north) / 2;
+      
+      const lonSpan = east - west;
+      const latSpan = north - south;
+      const maxSpan = Math.max(lonSpan, latSpan, 0.001);
+      
+      // Radius heuristic: convert degrees to meters roughly (1 deg ~ 111km)
+      radius = Math.max(maxSpan * 60000, 100); 
+    }
     
-    const west = Math.min(...lons);
-    const east = Math.max(...lons);
-    const south = Math.min(...lats);
-    const north = Math.max(...lats);
-    
-    const centerLon = (west + east) / 2;
-    const centerLat = (south + north) / 2;
-    
-    const lonSpan = east - west;
-    const latSpan = north - south;
-    const maxSpan = Math.max(lonSpan, latSpan, 0.001);
-    
-    // Create a bounding sphere around the markers
     const centerCartesian = Cesium.Cartesian3.fromDegrees(centerLon, centerLat);
-    // Radius heuristic: convert degrees to meters roughly (1 deg ~ 111km)
-    const radius = Math.max(maxSpan * 60000, 100); 
     const boundingSphere = new Cesium.BoundingSphere(centerCartesian, radius);
 
-    // 1. Teleport to high top-down view of the markers
+    // 1. Teleport to high top-down view of the markers (or center)
     viewer.camera.setView({
       destination: Cesium.Cartesian3.fromDegrees(centerLon, centerLat, radius * 10),
       orientation: {
@@ -239,12 +250,18 @@ const MapComponent: React.FC<MapComponentProps> = ({
         radius * 3.5 // Range (distance from center)
       ),
       duration: 4.0,
-      easingFunction: Cesium.EasingFunction.CUBIC_IN_OUT
+      easingFunction: Cesium.EasingFunction.CUBIC_IN_OUT,
+      complete: () => {
+        if (onAnimationComplete) {
+          // Add a small delay for a smoother transition to the popup
+          setTimeout(onAnimationComplete, 500);
+        }
+      }
     });
-  }, [viewerRef]);
+  }, [viewerRef, onAnimationComplete]);
 
   useEffect(() => {
-    if (isMapLoaded && markers.length > 0 && !hasInitialZoomedRef.current) {
+    if (isMapLoaded && !hasInitialZoomedRef.current) {
       zoomToMarkers(markers);
       hasInitialZoomedRef.current = true;
     }
@@ -312,13 +329,7 @@ const MapComponent: React.FC<MapComponentProps> = ({
         // --- Camera Constraints ---
         const controller = viewer.scene.screenSpaceCameraController;
         controller.minimumZoomDistance = 50;   // Don't get too close to ground
-        controller.maximumZoomDistance = 800;  // Don't zoom out too far
-
-        // Define a tighter bounding box around Parliament (approx 250m radius)
-        const minLon = 144.970;
-        const maxLon = 144.976;
-        const minLat = -37.814;
-        const maxLat = -37.808;
+        controller.maximumZoomDistance = 3000; // Increased to allow seeing the 2km range
 
         removeCameraListener = viewer.camera.changed.addEventListener(() => {
           if (!viewer || viewer.isDestroyed()) return;
@@ -329,6 +340,27 @@ const MapComponent: React.FC<MapComponentProps> = ({
 
           const lon = Cesium.Math.toDegrees(cartographic.longitude);
           const lat = Cesium.Math.toDegrees(cartographic.latitude);
+
+          // Calculate dynamic bounds based on markers (approx 2km margin)
+          // 1km is ~0.009 deg lat, ~0.011 deg lon at this latitude
+          const lonMargin = 0.022; // ~2km
+          const latMargin = 0.018; // ~2km
+
+          let minLon, maxLon, minLat, maxLat;
+          
+          if (markersRef.current.length > 0) {
+            const lons = markersRef.current.map(m => m.longitude);
+            const lats = markersRef.current.map(m => m.latitude);
+            minLon = Math.min(...lons) - lonMargin;
+            maxLon = Math.max(...lons) + lonMargin;
+            minLat = Math.min(...lats) - latMargin;
+            maxLat = Math.max(...lats) + latMargin;
+          } else {
+            minLon = INITIAL_CENTER.lng - lonMargin;
+            maxLon = INITIAL_CENTER.lng + lonMargin;
+            minLat = INITIAL_CENTER.lat - latMargin;
+            maxLat = INITIAL_CENTER.lat + latMargin;
+          }
 
           let correctedLon = lon;
           let correctedLat = lat;
@@ -520,6 +552,7 @@ export const GardenMap: React.FC = () => {
   const [showUnlockConfirm, setShowUnlockConfirm] = useState(false);
   const [selectedMarker, setSelectedMarker] = useState<PlantMarker | null>(null);
   const [authError, setAuthError] = useState<string | null>(null);
+  const [showWelcome, setShowWelcome] = useState(false);
   const viewerRef = useRef<Cesium.Viewer | null>(null);
 
   // Handle Anonymous Auth for Firestore Rules
@@ -653,7 +686,72 @@ export const GardenMap: React.FC = () => {
         deleteMarker={deleteMarker}
         viewerRef={viewerRef}
         canEdit={canEdit}
+        onAnimationComplete={() => {
+          // Only show welcome if it's the first time
+          if (!localStorage.getItem('welcome_shown')) {
+            setShowWelcome(true);
+          }
+        }}
       />
+
+      {/* Welcome Popup */}
+      <AnimatePresence>
+        {showWelcome && (
+          <div className="absolute inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-md">
+            <motion.div
+              initial={{ opacity: 0, scale: 0.9, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.9, y: 20 }}
+              className="bg-zinc-900 border border-white/10 p-8 rounded-[32px] shadow-2xl max-w-md w-full text-center relative overflow-hidden"
+            >
+              {/* Decorative Background Element */}
+              <div className="absolute -top-24 -right-24 w-48 h-48 bg-emerald-500/10 rounded-full blur-3xl pointer-events-none" />
+              
+              <div className="w-20 h-20 bg-emerald-500/20 rounded-3xl flex items-center justify-center mx-auto mb-8 rotate-3">
+                <MapIcon className="text-emerald-500" size={40} />
+              </div>
+
+              <h2 className="text-3xl font-bold text-white mb-4 tracking-tight">Welcome to the Garden</h2>
+              
+              <div className="space-y-6 text-left mb-10">
+                <div className="flex items-start gap-4">
+                  <div className="w-8 h-8 rounded-full bg-white/5 flex items-center justify-center shrink-0 mt-1">
+                    <span className="text-emerald-500 font-bold text-xs">01</span>
+                  </div>
+                  <div>
+                    <h4 className="text-white font-medium text-sm mb-1">Explore the Space</h4>
+                    <p className="text-gray-400 text-xs leading-relaxed">
+                      Left-click and drag to rotate the view. Right-click or use two fingers to zoom. Middle-click or use two fingers to pan.
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex items-start gap-4">
+                  <div className="w-8 h-8 rounded-full bg-white/5 flex items-center justify-center shrink-0 mt-1">
+                    <span className="text-emerald-500 font-bold text-xs">02</span>
+                  </div>
+                  <div>
+                    <h4 className="text-white font-medium text-sm mb-1">Discover Plants</h4>
+                    <p className="text-gray-400 text-xs leading-relaxed">
+                      Click on any green leaf icon to view photos and details about the plants in our collection.
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              <button
+                onClick={() => {
+                  setShowWelcome(false);
+                  localStorage.setItem('welcome_shown', 'true');
+                }}
+                className="w-full py-4 bg-emerald-500 hover:bg-emerald-600 text-white rounded-2xl font-semibold transition-all shadow-lg shadow-emerald-500/20 active:scale-[0.98]"
+              >
+                Got it
+              </button>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
 
       {/* Controls */}
       <div className="absolute top-0 left-0 z-10 flex flex-col gap-4 p-0">
