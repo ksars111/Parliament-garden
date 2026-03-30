@@ -53,11 +53,12 @@ const MarkerOverlay: React.FC<{
   useEffect(() => {
     const update = () => {
       if (!containerRef.current || !viewer || viewer.isDestroyed()) return;
-      const floatingHeight = 20;
-
       markers.forEach(marker => {
         const el = markerRefs.current[marker.id];
         if (!el) return;
+
+        // Trees float higher (20m), plants sit closer (5m)
+        const floatingHeight = marker.type === 'tree' ? 20 : 5;
 
         // 1. Get ground position (terrain aware)
         let groundPos = Cesium.Cartesian3.fromDegrees(marker.longitude, marker.latitude, 0);
@@ -131,7 +132,7 @@ const MarkerOverlay: React.FC<{
         >
            {/* The plant icon - clickable for details */}
            <div 
-             className="w-10 h-10 bg-emerald-500 rounded-full flex items-center justify-center shadow-lg border-2 border-white/40 relative z-10 overflow-hidden pointer-events-auto cursor-pointer"
+             className={`w-10 h-10 ${marker.type === 'tree' ? 'bg-emerald-400' : 'bg-emerald-800'} rounded-full flex items-center justify-center shadow-lg border-2 border-white/40 relative z-10 overflow-hidden pointer-events-auto cursor-pointer`}
              onClick={(e) => {
                e.stopPropagation();
                onMarkerClick(marker);
@@ -553,6 +554,7 @@ export const GardenMap: React.FC = () => {
   const [selectedMarker, setSelectedMarker] = useState<PlantMarker | null>(null);
   const [authError, setAuthError] = useState<string | null>(null);
   const [showWelcome, setShowWelcome] = useState(false);
+  const [activeType, setActiveType] = useState<'tree' | 'plant'>('plant');
   const viewerRef = useRef<Cesium.Viewer | null>(null);
 
   // Handle Anonymous Auth for Firestore Rules
@@ -603,10 +605,11 @@ export const GardenMap: React.FC = () => {
       uid: auth.currentUser?.uid || 'anonymous',
       latitude: lngLat.lat,
       longitude: lngLat.lng,
-      name: 'New Plant',
+      name: activeType === 'tree' ? 'New Tree' : 'New Plant',
       description: '',
       imageUrl: `https://picsum.photos/seed/${Math.random()}/400/300`,
-      createdAt: Date.now()
+      createdAt: Date.now(),
+      type: activeType
     };
 
     try {
@@ -771,10 +774,26 @@ export const GardenMap: React.FC = () => {
           </button>
         ) : (
           <div className="flex flex-col gap-3">
+            <div className="flex flex-col bg-black/40 backdrop-blur-md rounded-full p-1 border border-white/10">
+              <button
+                onClick={() => setActiveType('plant')}
+                className={`w-10 h-10 rounded-full flex items-center justify-center transition-all ${activeType === 'plant' ? 'bg-emerald-800 text-white' : 'text-white/40 hover:text-white/60'}`}
+                title="Select Plant Type"
+              >
+                <Leaf size={18} />
+              </button>
+              <button
+                onClick={() => setActiveType('tree')}
+                className={`w-10 h-10 rounded-full flex items-center justify-center transition-all ${activeType === 'tree' ? 'bg-emerald-400 text-white' : 'text-white/40 hover:text-white/60'}`}
+                title="Select Tree Type"
+              >
+                <Leaf size={24} />
+              </button>
+            </div>
             <button 
               onClick={addMarkerAtCenter}
               className="w-10 h-10 bg-emerald-500 hover:bg-emerald-600 backdrop-blur-md border border-emerald-500/30 rounded-full flex items-center justify-center text-white transition-all active:scale-95 shadow-xl"
-              title="Add Plant"
+              title={`Add ${activeType === 'tree' ? 'Tree' : 'Plant'}`}
             >
               <Plus size={20} strokeWidth={1.5} />
             </button>

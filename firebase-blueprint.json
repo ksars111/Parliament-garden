@@ -12,9 +12,10 @@
         "name": { "type": "string", "description": "The name of the plant." },
         "description": { "type": "string", "description": "The description of the plant." },
         "imageUrl": { "type": "string", "description": "The URL or base64 data of the plant's image." },
-        "createdAt": { "type": "number", "description": "The timestamp when the marker was created." }
+        "createdAt": { "type": "number", "description": "The timestamp when the marker was created." },
+        "type": { "type": "string", "enum": ["tree", "plant"], "description": "The type of the marker." }
       },
-      "required": ["id", "uid", "latitude", "longitude", "name", "createdAt"]
+      "required": ["id", "uid", "latitude", "longitude", "name", "createdAt", "type"]
     }
   },
   "firestore": {

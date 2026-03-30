@@ -15,6 +15,7 @@ export const PlantPopup: React.FC<PlantPopupProps> = ({ marker, onSave, onDelete
   const [name, setName] = useState(marker.name);
   const [description, setDescription] = useState(marker.description);
   const [imageUrl, setImageUrl] = useState(marker.imageUrl);
+  const [type, setType] = useState(marker.type);
   const [isEditing, setIsEditing] = useState(false);
   const [isExpanded, setIsExpanded] = useState(false);
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -27,7 +28,7 @@ export const PlantPopup: React.FC<PlantPopupProps> = ({ marker, onSave, onDelete
     : description;
 
   const handleSave = () => {
-    onSave({ ...marker, name, description, imageUrl });
+    onSave({ ...marker, name, description, imageUrl, type });
     setIsEditing(false);
   };
 
@@ -89,6 +90,23 @@ export const PlantPopup: React.FC<PlantPopupProps> = ({ marker, onSave, onDelete
         <div className="p-5 space-y-4">
           {isEditing ? (
             <div className="space-y-3">
+              <div>
+                <label className="text-[10px] font-bold uppercase tracking-wider text-gray-400 mb-1 block">Type</label>
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => setType('plant')}
+                    className={`flex-1 py-2 rounded-lg text-sm font-medium transition-all ${type === 'plant' ? 'bg-emerald-800 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}
+                  >
+                    Plant
+                  </button>
+                  <button
+                    onClick={() => setType('tree')}
+                    className={`flex-1 py-2 rounded-lg text-sm font-medium transition-all ${type === 'tree' ? 'bg-emerald-400 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}
+                  >
+                    Tree
+                  </button>
+                </div>
+              </div>
               <div>
                 <label className="text-[10px] font-bold uppercase tracking-wider text-gray-400 mb-1 block">Plant Name</label>
                 <input
@@ -153,9 +171,13 @@ export const PlantPopup: React.FC<PlantPopupProps> = ({ marker, onSave, onDelete
             </div>
           ) : (
             <div className="space-y-3">
-              <div>
+              <div className="flex items-center justify-between">
                 <h3 className="text-lg font-semibold text-gray-900 leading-tight">{name || 'Unnamed Plant'}</h3>
-                <div className="mt-1">
+                <span className={`text-[10px] font-bold uppercase tracking-widest px-2 py-1 rounded-md ${marker.type === 'tree' ? 'bg-emerald-100 text-emerald-600' : 'bg-emerald-800 text-white'}`}>
+                  {marker.type}
+                </span>
+              </div>
+              <div className="mt-1">
                   <p className="text-sm text-gray-600 leading-relaxed whitespace-pre-wrap">
                     {displayDescription || 'No description provided yet.'}
                   </p>
@@ -168,8 +190,7 @@ export const PlantPopup: React.FC<PlantPopupProps> = ({ marker, onSave, onDelete
                     </button>
                   )}
                 </div>
-              </div>
-              <div className="flex items-center justify-between pt-2 border-t border-gray-100">
+                <div className="flex items-center justify-between pt-2 border-t border-gray-100">
                 {canEdit ? (
                   <>
                     <button
@@ -231,7 +252,12 @@ export const PlantPopup: React.FC<PlantPopupProps> = ({ marker, onSave, onDelete
               </div>
               <div className="md:w-1/2 p-8 md:p-12 overflow-y-auto flex flex-col">
                 <div className="flex justify-between items-start mb-6">
-                  <h2 className="text-3xl font-bold text-gray-900 leading-tight">{name || 'Unnamed Plant'}</h2>
+                  <div>
+                    <h2 className="text-3xl font-bold text-gray-900 leading-tight">{name || 'Unnamed Plant'}</h2>
+                    <span className={`inline-block mt-2 text-xs font-bold uppercase tracking-widest px-3 py-1 rounded-full ${marker.type === 'tree' ? 'bg-emerald-100 text-emerald-600' : 'bg-emerald-800 text-white'}`}>
+                      {marker.type}
+                    </span>
+                  </div>
                   <button 
                     onClick={() => setIsModalOpen(false)}
                     className="hidden md:flex p-2 hover:bg-gray-100 rounded-full text-gray-400 hover:text-gray-600 transition-colors"

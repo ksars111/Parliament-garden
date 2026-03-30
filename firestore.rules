@@ -16,6 +16,7 @@ service cloud.firestore {
     //   - description: string (optional)
     //   - imageUrl: string (optional)
     //   - createdAt: number (required)
+    //   - type: string (required, enum: ['tree', 'plant'])
     //
     // ===============================================================
 
@@ -24,7 +25,7 @@ service cloud.firestore {
     }
 
     function isValidMarker(data) {
-      return data.keys().hasAll(['id', 'uid', 'latitude', 'longitude', 'name', 'createdAt']) &&
+      return data.keys().hasAll(['id', 'uid', 'latitude', 'longitude', 'name', 'createdAt', 'type']) &&
              data.id is string && data.id.size() < 100 &&
              data.uid is string && data.uid.size() < 100 &&
              data.latitude is number &&
@@ -32,7 +33,8 @@ service cloud.firestore {
              data.name is string && data.name.size() > 0 && data.name.size() < 200 &&
              (!('description' in data) || (data.description is string && data.description.size() < 2000)) &&
              (!('imageUrl' in data) || (data.imageUrl is string && data.imageUrl.size() < 2000)) &&
-             data.createdAt is number;
+             data.createdAt is number &&
+             data.type in ['tree', 'plant'];
     }
 
     function isAdmin() {

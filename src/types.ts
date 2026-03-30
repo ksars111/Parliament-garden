@@ -7,4 +7,5 @@ export interface PlantMarker {
   description: string;
   imageUrl: string;
   createdAt: number;
+  type: 'tree' | 'plant';
 }
