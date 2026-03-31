@@ -265,15 +265,36 @@ const MapComponent: React.FC<MapComponentProps> = ({
     if (!viewerRef.current) return;
     const viewer = viewerRef.current;
     
-    const centerCartesian = Cesium.Cartesian3.fromDegrees(marker.longitude, marker.latitude);
-    const radius = 20; // Small radius for focus
-    const boundingSphere = new Cesium.BoundingSphere(centerCartesian, radius);
+    // Replicate floating height logic from MarkerOverlay
+    const floatingHeight = marker.type === 'tree' ? 20 : 5;
+    
+    // Get ground position (ellipsoid surface)
+    let groundPos = Cesium.Cartesian3.fromDegrees(marker.longitude, marker.latitude, 0);
+    
+    // Try to get actual ground position if terrain is loaded
+    const clamped = viewer.scene.clampToHeight(groundPos);
+    if (Cesium.defined(clamped)) {
+      groundPos = clamped;
+    }
+    
+    // Get surface normal (up direction)
+    const up = viewer.scene.globe.ellipsoid.geodeticSurfaceNormal(groundPos);
+    
+    // Calculate floating position where the icon actually sits
+    const floatingPos = Cesium.Cartesian3.add(
+      groundPos,
+      Cesium.Cartesian3.multiplyByScalar(up, floatingHeight, new Cesium.Cartesian3()),
+      new Cesium.Cartesian3()
+    );
+
+    const radius = 10; // Tighter focus on the icon itself
+    const boundingSphere = new Cesium.BoundingSphere(floatingPos, radius);
 
     viewer.camera.flyToBoundingSphere(boundingSphere, {
       offset: new Cesium.HeadingPitchRange(
         viewer.camera.heading,
         Cesium.Math.toRadians(-45), // Tilted view for better perspective
-        120 // Distance from point (meters)
+        100 // Slightly closer focus
       ),
       duration: 1.5,
       easingFunction: Cesium.EasingFunction.CUBIC_IN_OUT
@@ -864,10 +885,10 @@ export const GardenMap: React.FC = () => {
         )}
       </AnimatePresence>
 
-      {/* Popup Overlay - Minimalist */}
+      {/* Popup Overlay - Minimalist - Positioned to the right to keep icon centered and visible */}
       <AnimatePresence>
         {selectedMarker && (
-          <div className="absolute inset-0 z-40 pointer-events-none flex items-center justify-center p-4">
+          <div className="absolute inset-y-0 right-0 z-40 pointer-events-none flex items-center justify-end p-6 md:p-12">
             <div className="pointer-events-auto">
               <PlantPopup
                 marker={selectedMarker}
