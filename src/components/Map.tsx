@@ -261,6 +261,25 @@ const MapComponent: React.FC<MapComponentProps> = ({
     });
   }, [viewerRef, onAnimationComplete]);
 
+  const zoomToMarker = useCallback((marker: PlantMarker) => {
+    if (!viewerRef.current) return;
+    const viewer = viewerRef.current;
+    
+    const centerCartesian = Cesium.Cartesian3.fromDegrees(marker.longitude, marker.latitude);
+    const radius = 20; // Small radius for focus
+    const boundingSphere = new Cesium.BoundingSphere(centerCartesian, radius);
+
+    viewer.camera.flyToBoundingSphere(boundingSphere, {
+      offset: new Cesium.HeadingPitchRange(
+        viewer.camera.heading,
+        Cesium.Math.toRadians(-45), // Tilted view for better perspective
+        120 // Distance from point (meters)
+      ),
+      duration: 1.5,
+      easingFunction: Cesium.EasingFunction.CUBIC_IN_OUT
+    });
+  }, [viewerRef]);
+
   useEffect(() => {
     if (isMapLoaded && !hasInitialZoomedRef.current) {
       zoomToMarkers(markers);
@@ -534,6 +553,7 @@ const MapComponent: React.FC<MapComponentProps> = ({
           markers={markers}
           onMarkerClick={(marker) => {
             if (!draggedRef.current) {
+              zoomToMarker(marker);
               onMarkerClick(marker);
             }
           }}
