@@ -363,14 +363,12 @@ const MapComponent: React.FC<MapComponentProps> = ({
 
         viewerRef.current = viewer;
 
-        // Add Google Maps 2D satellite images from Cesium Ion (Asset ID 3830182)
-        try {
-          const layer = viewer.imageryLayers.addImageryProvider(
-            await Cesium.IonImageryProvider.fromAssetId(3830182),
-          );
-        } catch (error) {
-          console.error("Error loading Google Maps 2D satellite imagery from Ion:", error);
-        }
+        // Add Google Maps satellite tiles as requested by user
+        const googleImagery = new Cesium.UrlTemplateImageryProvider({
+          url: 'https://mt1.google.com/vt/lyrs=s&x={x}&y={y}&z={z}',
+          credit: 'Google Maps'
+        });
+        viewer.imageryLayers.addImageryProvider(googleImagery);
 
         if (viewer.isDestroyed()) return;
 
