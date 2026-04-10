@@ -21,7 +21,7 @@ import {
 
 // Parliament of Victoria, Melbourne
 const INITIAL_CENTER: [number, number] = [144.9742, -37.8108];
-const INITIAL_ZOOM = 18;
+const INITIAL_ZOOM = 17;
 
 interface MapComponentProps {
   markers: PlantMarker[];
@@ -195,7 +195,7 @@ const MapComponent: React.FC<MapComponentProps> = ({
     if (isMapLoaded && mapRef.current && markers.length > 0) {
       const bounds = new maplibregl.LngLatBounds();
       markers.forEach(m => bounds.extend([m.longitude, m.latitude]));
-      mapRef.current.fitBounds(bounds, { padding: 100, maxZoom: 18 });
+      mapRef.current.fitBounds(bounds, { padding: 100, maxZoom: 17 });
     }
   }, [isMapLoaded]);
 
