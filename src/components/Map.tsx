@@ -50,6 +50,23 @@ const MapComponent: React.FC<MapComponentProps> = ({
   const [isMapLoaded, setIsMapLoaded] = useState(false);
   const [zoomLevel, setZoomLevel] = useState(INITIAL_ZOOM);
   const markersLayerRef = useRef<Record<string, maplibregl.Marker>>({});
+  const previousViewRef = useRef<{ center: maplibregl.LngLat; zoom: number; pitch: number; bearing: number } | null>(null);
+
+  // Handle returning to previous view when popup closes
+  useEffect(() => {
+    if (!selectedMarker && previousViewRef.current && mapRef.current) {
+      const view = previousViewRef.current;
+      mapRef.current.flyTo({
+        center: view.center,
+        zoom: view.zoom,
+        pitch: view.pitch,
+        bearing: view.bearing,
+        speed: 1.2,
+        curve: 1.42
+      });
+      previousViewRef.current = null;
+    }
+  }, [selectedMarker, mapRef]);
 
   // Initialize Map
   useEffect(() => {
@@ -164,7 +181,17 @@ const MapComponent: React.FC<MapComponentProps> = ({
         // Click handler
         el.addEventListener('click', (e) => {
           e.stopPropagation();
-          onMarkerClick(marker);
+          
+          if (!mapRef.current) return;
+          const map = mapRef.current;
+
+          // Save current view before flying
+          previousViewRef.current = {
+            center: map.getCenter(),
+            zoom: map.getZoom(),
+            pitch: map.getPitch(),
+            bearing: map.getBearing()
+          };
           
           // Fly to marker
           map.flyTo({
@@ -172,6 +199,11 @@ const MapComponent: React.FC<MapComponentProps> = ({
             zoom: 20,
             speed: 1.2,
             curve: 1.42
+          });
+
+          // Only show popup after animation finishes
+          map.once('moveend', () => {
+            onMarkerClick(marker);
           });
         });
 
