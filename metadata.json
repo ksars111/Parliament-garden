@@ -1,6 +1,6 @@
 {
-  "name": "3D Map of parliament Gardens",
-  "description": "A 3D map of the Parliament of Victoria for mapping and documenting garden plants.",
+  "name": "Parliament Garden Map",
+  "description": "A high-performance 2D map of the Parliament of Victoria for mapping and documenting garden plants, inspired by Felt.",
   "requestFramePermissions": [
     "geolocation"
   ]

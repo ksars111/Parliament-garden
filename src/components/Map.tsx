@@ -1,6 +1,6 @@
 import React, { useState, useCallback, useEffect, useRef } from 'react';
-import * as Cesium from 'cesium';
-import "cesium/Build/Cesium/Widgets/widgets.css";
+import maplibregl from 'maplibre-gl';
+import 'maplibre-gl/dist/maplibre-gl.css';
 import { Leaf, Plus, Map as MapIcon, Info, List, Search, X, ChevronRight, Pencil, ShieldCheck, AlertCircle } from 'lucide-react';
 import { PlantMarker } from '../types';
 import { PlantPopup } from './PlantPopup';
@@ -19,14 +19,9 @@ import {
   signInAnonymously
 } from '../firebase';
 
-const GOOGLE_MAPS_API_KEY = import.meta.env.VITE_GOOGLE_MAPS_API_KEY;
-const CESIUM_ION_ACCESS_TOKEN = import.meta.env.VITE_CESIUM_ION_ACCESS_TOKEN;
-
-// Parliament of Victoria, Melbourne - Centered more on the Annexe/Gardens
-const INITIAL_CENTER = {
-  lng: 144.9742,
-  lat: -37.8108
-};
+// Parliament of Victoria, Melbourne
+const INITIAL_CENTER: [number, number] = [144.9742, -37.8108];
+const INITIAL_ZOOM = 18;
 
 interface MapComponentProps {
   markers: PlantMarker[];
@@ -35,147 +30,10 @@ interface MapComponentProps {
   onClosePopup: () => void;
   onUpdatePosition: (updated: PlantMarker) => void;
   deleteMarker: (id: string) => void;
-  viewerRef: React.MutableRefObject<Cesium.Viewer | null>;
+  mapRef: React.MutableRefObject<maplibregl.Map | null>;
   canEdit?: boolean;
   onAnimationComplete?: () => void;
 }
-
-const MarkerOverlay: React.FC<{
-  viewer: Cesium.Viewer;
-  markers: PlantMarker[];
-  onMarkerClick: (marker: PlantMarker) => void;
-  onDragStart: (e: React.MouseEvent, marker: PlantMarker) => void;
-  canEdit?: boolean;
-}> = ({ viewer, markers, onMarkerClick, onDragStart, canEdit = false }) => {
-  const containerRef = useRef<HTMLDivElement>(null);
-  const markerRefs = useRef<Record<string, HTMLDivElement | null>>({});
-
-  useEffect(() => {
-    const update = () => {
-      if (!containerRef.current || !viewer || viewer.isDestroyed()) return;
-      markers.forEach(marker => {
-        const el = markerRefs.current[marker.id];
-        if (!el) return;
-
-        // Both trees and plants float at 20m
-        const floatingHeight = 20;
-
-        // 1. Get ground position (terrain aware)
-        let groundPos = Cesium.Cartesian3.fromDegrees(marker.longitude, marker.latitude, 0);
-        // Try to clamp to terrain/tiles for accurate ground contact
-        const clamped = viewer.scene.clampToHeight(groundPos);
-        if (Cesium.defined(clamped)) {
-          groundPos = clamped;
-        }
-
-        // 2. Get floating position (20m above ground, following surface normal)
-        const up = viewer.scene.globe.ellipsoid.geodeticSurfaceNormal(groundPos);
-        const floatingPos = Cesium.Cartesian3.add(
-          groundPos,
-          Cesium.Cartesian3.multiplyByScalar(up, floatingHeight, new Cesium.Cartesian3()),
-          new Cesium.Cartesian3()
-        );
-
-        const screenPos = Cesium.SceneTransforms.worldToWindowCoordinates(viewer.scene, floatingPos);
-        const screenGroundPos = Cesium.SceneTransforms.worldToWindowCoordinates(viewer.scene, groundPos);
-
-        // Simple visibility check: is the point in front of the camera?
-        const cameraPosition = viewer.camera.position;
-        const cameraDirection = viewer.camera.direction;
-        const toPoint = Cesium.Cartesian3.subtract(floatingPos, cameraPosition, new Cesium.Cartesian3());
-        const distance = Cesium.Cartesian3.distance(cameraPosition, floatingPos);
-        const isVisible = Cesium.Cartesian3.dot(cameraDirection, toPoint) > 0;
-
-        if (screenPos && screenGroundPos && isVisible) {
-          el.style.display = 'block';
-          el.style.transform = `translate3d(${screenPos.x}px, ${screenPos.y}px, 0) translate(-50%, -50%)`;
-          // Set z-index based on distance (closer = higher)
-          el.style.zIndex = Math.round(1000000 - distance).toString();
-          
-          // Calculate scale based on distance (closer = bigger, further = smaller)
-          const scale = Math.max(0.4, Math.min(1.2, 300 / distance));
-          const icon = el.querySelector('.marker-icon') as HTMLDivElement;
-          if (icon) {
-            icon.style.transform = `scale(${scale})`;
-          }
-
-          // Update tether line
-          const line = el.querySelector('.tether-line') as HTMLDivElement;
-          if (line) {
-            const dx = screenGroundPos.x - screenPos.x;
-            const dy = screenGroundPos.y - screenPos.y;
-            const length = Math.sqrt(dx*dx + dy*dy);
-            const angle = Math.atan2(dy, dx);
-            line.style.height = `${length}px`;
-            line.style.transform = `rotate(${angle - Math.PI/2}rad)`;
-          }
-
-          // Update ground anchor dot
-          const groundAnchor = el.querySelector('.ground-anchor') as HTMLDivElement;
-          if (groundAnchor) {
-            const dx = screenGroundPos.x - screenPos.x;
-            const dy = screenGroundPos.y - screenPos.y;
-            groundAnchor.style.transform = `translate(${dx}px, ${dy}px) translate(-50%, -50%)`;
-          }
-        } else {
-          el.style.display = 'none';
-        }
-      });
-    };
-
-    const remove = viewer.scene.postRender.addEventListener(update);
-    // Trigger an initial update after the component has rendered its markers
-    requestAnimationFrame(update);
-    return () => remove();
-  }, [viewer, markers]);
-
-  return (
-    <div ref={containerRef} className="absolute inset-0 pointer-events-none overflow-hidden z-20">
-      {markers.map(marker => (
-        <div
-          key={marker.id}
-          ref={el => { markerRefs.current[marker.id] = el; }}
-          className="absolute left-0 top-0"
-        >
-           {/* The plant icon - clickable for details */}
-           <div 
-             className={`marker-icon w-10 h-10 ${marker.type === 'tree' ? 'bg-emerald-400' : 'bg-emerald-800'} rounded-full flex items-center justify-center shadow-lg border-2 border-white/40 relative z-10 overflow-hidden pointer-events-auto cursor-pointer transition-transform duration-200 ease-out`}
-             onClick={(e) => {
-               e.stopPropagation();
-               onMarkerClick(marker);
-             }}
-           >
-              {marker.imageUrl ? (
-                <img 
-                  src={marker.imageUrl} 
-                  alt="" 
-                  className="w-full h-full object-cover"
-                  referrerPolicy="no-referrer"
-                />
-              ) : (
-                <Leaf size={20} className="text-white" />
-              )}
-           </div>
-           {/* The tether line connecting icon to ground */}
-           <div className="tether-line absolute top-1/2 left-1/2 w-0.5 bg-white/40 origin-top pointer-events-none" />
-           {/* The ground anchor point - handles dragging only in edit mode */}
-           <div 
-             className={`ground-anchor absolute top-1/2 left-1/2 w-2 h-2 bg-emerald-500/60 rounded-full border border-white/40 pointer-events-auto ${canEdit ? 'cursor-grab active:cursor-grabbing' : 'cursor-pointer'}`}
-             onClick={(e) => {
-               e.stopPropagation();
-               onMarkerClick(marker);
-             }}
-             onMouseDown={(e) => {
-               if (e.button === 0 && canEdit) { // Left click only and in edit mode
-                 onDragStart(e, marker);
-               }
-             }}
-           />
-        </div>
-      ))}
-    </div>
-  );
-};
 
 const MapComponent: React.FC<MapComponentProps> = ({ 
   markers, 
@@ -184,369 +42,162 @@ const MapComponent: React.FC<MapComponentProps> = ({
   onClosePopup,
   onUpdatePosition,
   deleteMarker,
-  viewerRef,
+  mapRef,
   canEdit = false,
   onAnimationComplete
 }) => {
   const containerRef = useRef<HTMLDivElement>(null);
-  const [viewerReady, setViewerReady] = useState(false);
   const [isMapLoaded, setIsMapLoaded] = useState(false);
-  const draggingMarkerIdRef = useRef<string | null>(null);
-  const isDraggingRef = useRef(false);
-  const draggedRef = useRef(false);
-  const dragStartPosRef = useRef<Cesium.Cartesian2 | null>(null);
-  const hasInitialZoomedRef = useRef(false);
+  const [zoomLevel, setZoomLevel] = useState(INITIAL_ZOOM);
+  const markersLayerRef = useRef<Record<string, maplibregl.Marker>>({});
 
-  // Use refs for callbacks and markers to avoid re-initializing the viewer unnecessarily
-  const onMarkerClickRef = useRef(onMarkerClick);
-  const onUpdatePositionRef = useRef(onUpdatePosition);
-  const markersRef = useRef(markers);
-
+  // Initialize Map
   useEffect(() => {
-    onMarkerClickRef.current = onMarkerClick;
-    onUpdatePositionRef.current = onUpdatePosition;
-    markersRef.current = markers;
-  }, [onMarkerClick, onUpdatePosition, markers]);
+    if (!containerRef.current || mapRef.current) return;
 
-  const zoomToMarkers = useCallback((markersToFit: PlantMarker[]) => {
-    if (!viewerRef.current) return;
-    
-    const viewer = viewerRef.current;
-    
-    let centerLon = INITIAL_CENTER.lng;
-    let centerLat = INITIAL_CENTER.lat;
-    let radius = 200; // Default radius if no markers
+    const map = new maplibregl.Map({
+      container: containerRef.current,
+      style: {
+        version: 8,
+        sources: {
+          'google-satellite': {
+            type: 'raster',
+            tiles: ['https://mt1.google.com/vt/lyrs=s&x={x}&y={y}&z={z}'],
+            tileSize: 256,
+            attribution: '© Google'
+          }
+        },
+        layers: [
+          {
+            id: 'google-satellite',
+            type: 'raster',
+            source: 'google-satellite',
+            minzoom: 0,
+            maxzoom: 22
+          }
+        ]
+      },
+      center: INITIAL_CENTER,
+      zoom: INITIAL_ZOOM,
+      pitch: 45, // Slight tilt like Felt
+    });
 
-    if (markersToFit.length > 0) {
-      const lons = markersToFit.map(m => m.longitude);
-      const lats = markersToFit.map(m => m.latitude);
-      
-      const west = Math.min(...lons);
-      const east = Math.max(...lons);
-      const south = Math.min(...lats);
-      const north = Math.max(...lats);
-      
-      centerLon = (west + east) / 2;
-      centerLat = (south + north) / 2;
-      
-      const lonSpan = east - west;
-      const latSpan = north - south;
-      const maxSpan = Math.max(lonSpan, latSpan, 0.001);
-      
-      // Radius heuristic: convert degrees to meters roughly (1 deg ~ 111km)
-      radius = Math.max(maxSpan * 60000, 100); 
-    }
-    
-    const centerCartesian = Cesium.Cartesian3.fromDegrees(centerLon, centerLat);
-    const boundingSphere = new Cesium.BoundingSphere(centerCartesian, radius);
+    mapRef.current = map;
 
-    // 1. Teleport to high top-down view of the markers (or center)
-    viewer.camera.setView({
-      destination: Cesium.Cartesian3.fromDegrees(centerLon, centerLat, radius * 10),
-      orientation: {
-        heading: 0,
-        pitch: Cesium.Math.toRadians(-90),
-        roll: 0
+    map.on('load', () => {
+      setIsMapLoaded(true);
+      setZoomLevel(map.getZoom());
+      if (onAnimationComplete) {
+        onAnimationComplete();
       }
     });
 
-    // 2. Animate to lower tilted view to showcase movement
-    viewer.camera.flyToBoundingSphere(boundingSphere, {
-      offset: new Cesium.HeadingPitchRange(
-        Cesium.Math.toRadians(0),
-        Cesium.Math.toRadians(-35), // Tilted view
-        radius * 3.5 // Range (distance from center)
-      ),
-      duration: 4.0,
-      easingFunction: Cesium.EasingFunction.CUBIC_IN_OUT,
-      complete: () => {
-        if (onAnimationComplete) {
-          // Add a small delay for a smoother transition to the popup
-          setTimeout(onAnimationComplete, 500);
-        }
+    map.on('zoom', () => {
+      setZoomLevel(map.getZoom());
+    });
+
+    map.on('click', (e) => {
+      // Close popup when clicking the map
+      if (!e.defaultPrevented) {
+        onClosePopup();
       }
     });
-  }, [viewerRef, onAnimationComplete]);
-
-  const zoomToMarker = useCallback((marker: PlantMarker) => {
-    if (!viewerRef.current) return;
-    const viewer = viewerRef.current;
-    
-    // Both trees and plants float at 20m
-    const floatingHeight = 20;
-    
-    // Get ground position (ellipsoid surface)
-    let groundPos = Cesium.Cartesian3.fromDegrees(marker.longitude, marker.latitude, 0);
-    
-    // Try to get actual ground position if terrain is loaded
-    const clamped = viewer.scene.clampToHeight(groundPos);
-    if (Cesium.defined(clamped)) {
-      groundPos = clamped;
-    }
-    
-    // Get surface normal (up direction)
-    const up = viewer.scene.globe.ellipsoid.geodeticSurfaceNormal(groundPos);
-    
-    // Calculate floating position where the icon actually sits
-    const floatingPos = Cesium.Cartesian3.add(
-      groundPos,
-      Cesium.Cartesian3.multiplyByScalar(up, floatingHeight, new Cesium.Cartesian3()),
-      new Cesium.Cartesian3()
-    );
-
-    const radius = 10; // Tighter focus on the icon itself
-    const boundingSphere = new Cesium.BoundingSphere(floatingPos, radius);
-
-    viewer.camera.flyToBoundingSphere(boundingSphere, {
-      offset: new Cesium.HeadingPitchRange(
-        viewer.camera.heading,
-        Cesium.Math.toRadians(-45), // Tilted view for better perspective
-        100 // Slightly closer focus
-      ),
-      duration: 1.5,
-      easingFunction: Cesium.EasingFunction.CUBIC_IN_OUT
-    });
-  }, [viewerRef]);
-
-  useEffect(() => {
-    if (isMapLoaded && !hasInitialZoomedRef.current) {
-      zoomToMarkers(markers);
-      hasInitialZoomedRef.current = true;
-    }
-  }, [isMapLoaded, markers, zoomToMarkers]);
-
-  // Global mouseup listener to ensure drag state is cleared even if released outside canvas
-  useEffect(() => {
-    const handleGlobalMouseUp = () => {
-      if (isDraggingRef.current) {
-        isDraggingRef.current = false;
-        draggingMarkerIdRef.current = null;
-        if (viewerRef.current && !viewerRef.current.isDestroyed()) {
-          viewerRef.current.scene.screenSpaceCameraController.enableInputs = true;
-        }
-      }
-    };
-
-    window.addEventListener('mouseup', handleGlobalMouseUp);
-    return () => window.removeEventListener('mouseup', handleGlobalMouseUp);
-  }, []);
-
-  useEffect(() => {
-    if (!containerRef.current || viewerRef.current) return;
-
-    let viewer: Cesium.Viewer | null = null;
-    let removeCameraListener: (() => void) | null = null;
-
-    const initCesium = async () => {
-      try {
-        if (CESIUM_ION_ACCESS_TOKEN) {
-          Cesium.Ion.defaultAccessToken = CESIUM_ION_ACCESS_TOKEN;
-        }
-
-        viewer = new Cesium.Viewer(containerRef.current!, {
-          terrain: Cesium.Terrain.fromWorldTerrain(),
-          baseLayer: false, // Disable default 2D map underlay
-          animation: false,
-          baseLayerPicker: false,
-          fullscreenButton: false,
-          vrButton: false,
-          geocoder: false,
-          homeButton: false,
-          infoBox: false,
-          sceneModePicker: false,
-          selectionIndicator: false,
-          timeline: false,
-          navigationHelpButton: false,
-          navigationInstructionsInitiallyVisible: false,
-          scene3DOnly: true,
-        });
-
-        viewerRef.current = viewer;
-
-        // Add Google Maps satellite tiles as requested by user
-        const googleImagery = new Cesium.UrlTemplateImageryProvider({
-          url: 'https://mt1.google.com/vt/lyrs=s&x={x}&y={y}&z={z}',
-          credit: 'Google Maps'
-        });
-        viewer.imageryLayers.addImageryProvider(googleImagery);
-
-        if (viewer.isDestroyed()) return;
-
-        // --- Camera Constraints ---
-        const controller = viewer.scene.screenSpaceCameraController;
-        controller.minimumZoomDistance = 50;   // Don't get too close to ground
-        controller.maximumZoomDistance = 1500; // Reduced to match 500m focus
-
-        removeCameraListener = viewer.camera.changed.addEventListener(() => {
-          if (!viewer || viewer.isDestroyed()) return;
-          
-          const camera = viewer.camera;
-          const cartographic = Cesium.Cartographic.fromCartesian(camera.position);
-          if (!cartographic) return;
-
-          const lon = Cesium.Math.toDegrees(cartographic.longitude);
-          const lat = Cesium.Math.toDegrees(cartographic.latitude);
-
-          // Calculate dynamic bounds based on markers (approx 500m margin)
-          // 500m is ~0.0045 deg lat, ~0.0057 deg lon at this latitude
-          const lonMargin = 0.0057; 
-          const latMargin = 0.0045; 
-
-          let minLon, maxLon, minLat, maxLat;
-          
-          if (markersRef.current.length > 0) {
-            const lons = markersRef.current.map(m => m.longitude);
-            const lats = markersRef.current.map(m => m.latitude);
-            minLon = Math.min(...lons) - lonMargin;
-            maxLon = Math.max(...lons) + lonMargin;
-            minLat = Math.min(...lats) - latMargin;
-            maxLat = Math.max(...lats) + latMargin;
-          } else {
-            minLon = INITIAL_CENTER.lng - lonMargin;
-            maxLon = INITIAL_CENTER.lng + lonMargin;
-            minLat = INITIAL_CENTER.lat - latMargin;
-            maxLat = INITIAL_CENTER.lat + latMargin;
-          }
-
-          let correctedLon = lon;
-          let correctedLat = lat;
-          let needsCorrection = false;
-
-          // Add a small buffer to prevent jitter
-          const buffer = 0.0001;
-
-          if (lon < minLon) { correctedLon = minLon + buffer; needsCorrection = true; }
-          if (lon > maxLon) { correctedLon = maxLon - buffer; needsCorrection = true; }
-          if (lat < minLat) { correctedLat = minLat + buffer; needsCorrection = true; }
-          if (lat > maxLat) { correctedLat = maxLat - buffer; needsCorrection = true; }
-
-          if (needsCorrection) {
-            camera.setView({
-              destination: Cesium.Cartesian3.fromDegrees(correctedLon, correctedLat, cartographic.height),
-              orientation: {
-                heading: camera.heading,
-                pitch: camera.pitch,
-                roll: camera.roll
-              }
-            });
-          }
-
-          // Performance Optimization: Limit rendering to the active area
-          const limitRect = Cesium.Rectangle.fromDegrees(
-            minLon - 0.001, minLat - 0.001, // Adding tiny buffer
-            maxLon + 0.001, maxLat + 0.001
-          );
-          viewer.scene.globe.cartographicLimitRectangle = limitRect;
-        });
-        // ---------------------------
-
-        // Set initial view to a high top-down perspective
-        viewer.camera.setView({
-          destination: Cesium.Cartesian3.fromDegrees(INITIAL_CENTER.lng, INITIAL_CENTER.lat, 2000),
-          orientation: {
-            heading: Cesium.Math.toRadians(0),
-            pitch: Cesium.Math.toRadians(-90),
-            roll: 0.0
-          }
-        });
-
-        // Drag and Drop Logic
-        const handler = new Cesium.ScreenSpaceEventHandler(viewer.scene.canvas);
-        
-        // MOUSE_MOVE: Update position if dragging
-        handler.setInputAction((movement: any) => {
-          if (!viewer || viewer.isDestroyed()) return;
-          if (isDraggingRef.current && draggingMarkerIdRef.current) {
-            // Only consider it a drag if moved more than 5 pixels
-            if (!draggedRef.current && dragStartPosRef.current) {
-              const dist = Cesium.Cartesian2.distance(dragStartPosRef.current, movement.endPosition);
-              if (dist > 5) {
-                draggedRef.current = true;
-              }
-            }
-
-            // Only update position if we have confirmed this is a drag
-            if (draggedRef.current) {
-              const ray = viewer.camera.getPickRay(movement.endPosition);
-              const cartesian = viewer.scene.globe.pick(ray!, viewer.scene);
-              if (Cesium.defined(cartesian)) {
-                const cartographic = Cesium.Cartographic.fromCartesian(cartesian);
-                const lng = Cesium.Math.toDegrees(cartographic.longitude);
-                const lat = Cesium.Math.toDegrees(cartographic.latitude);
-                
-                // Update marker in state
-                const marker = markersRef.current.find(m => m.id === draggingMarkerIdRef.current);
-                if (marker) {
-                  onUpdatePositionRef.current({
-                    ...marker,
-                    latitude: lat,
-                    longitude: lng
-                  });
-                }
-              }
-            }
-          }
-        }, Cesium.ScreenSpaceEventType.MOUSE_MOVE);
-
-        // LEFT_UP: End dragging
-        handler.setInputAction(() => {
-          if (!viewer || viewer.isDestroyed()) return;
-          if (isDraggingRef.current) {
-            isDraggingRef.current = false;
-            draggingMarkerIdRef.current = null;
-            viewer.scene.screenSpaceCameraController.enableInputs = true;
-          }
-        }, Cesium.ScreenSpaceEventType.LEFT_UP);
-
-        // LEFT_CLICK: Close popup when clicking the map
-        handler.setInputAction(() => {
-          if (!viewer || viewer.isDestroyed()) return;
-          onClosePopup();
-        }, Cesium.ScreenSpaceEventType.LEFT_CLICK);
-
-        // Track tile loading progress to hide loading screen
-        let initialLoadComplete = false;
-        const removeTileLoadListener = viewer.scene.globe.tileLoadProgressEvent.addEventListener((queueLength) => {
-          if (queueLength === 0 && !initialLoadComplete) {
-            initialLoadComplete = true;
-            setIsMapLoaded(true);
-            removeTileLoadListener();
-          }
-        });
-
-        setViewerReady(true);
-      } catch (error) {
-        console.error("Error initializing Cesium:", error);
-      }
-    };
-
-    initCesium();
 
     return () => {
-      if (viewer && !viewer.isDestroyed()) {
-        if (removeCameraListener) removeCameraListener();
-        viewer.destroy();
-        viewerRef.current = null;
-      }
+      map.remove();
+      mapRef.current = null;
     };
-  }, [viewerRef]);
+  }, []);
 
-  const onDragStart = (e: React.MouseEvent, marker: PlantMarker) => {
-    e.stopPropagation();
-    if (!viewerRef.current || selectedMarker || !canEdit) return;
-    draggingMarkerIdRef.current = marker.id;
-    isDraggingRef.current = true;
-    draggedRef.current = false;
-    
-    // Convert client coordinates to canvas coordinates for distance calculation
-    const rect = viewerRef.current.canvas.getBoundingClientRect();
-    dragStartPosRef.current = new Cesium.Cartesian2(
-      e.clientX - rect.left,
-      e.clientY - rect.top
-    );
+  // Sync Markers
+  useEffect(() => {
+    if (!isMapLoaded || !mapRef.current) return;
 
-    viewerRef.current.scene.screenSpaceCameraController.enableInputs = false;
-  };
+    const map = mapRef.current;
+    const currentMarkerIds = new Set(markers.map(m => m.id));
+
+    // Remove markers that are no longer in the list
+    Object.keys(markersLayerRef.current).forEach(id => {
+      if (!currentMarkerIds.has(id)) {
+        markersLayerRef.current[id].remove();
+        delete markersLayerRef.current[id];
+      }
+    });
+
+    // Add or update markers
+    markers.forEach(marker => {
+      const existingMarker = markersLayerRef.current[marker.id];
+
+      if (existingMarker) {
+        // Update position if not dragging
+        // Note: MapLibre handles dragging internally if enabled
+        existingMarker.setLngLat([marker.longitude, marker.latitude]);
+        existingMarker.setDraggable(canEdit);
+      } else {
+        // Create custom marker element
+        const el = document.createElement('div');
+        el.className = 'cursor-pointer'; // Base container for MapLibre positioning
+        
+        // Inner wrapper for visual style and hover effects
+        const inner = document.createElement('div');
+        inner.className = `w-10 h-10 ${marker.type === 'tree' ? 'bg-emerald-400' : 'bg-emerald-800'} rounded-full flex items-center justify-center shadow-lg border-2 border-white/40 overflow-hidden transition-transform duration-200 hover:scale-110 active:scale-95`;
+        el.appendChild(inner);
+        
+        if (marker.imageUrl) {
+          const img = document.createElement('img');
+          img.src = marker.imageUrl;
+          img.className = 'w-full h-full object-cover';
+          img.referrerPolicy = 'no-referrer';
+          inner.appendChild(img);
+        } else {
+          // Fallback icon (simplified for DOM)
+          inner.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 20A7 7 0 0 1 9.8 6.1C15.5 5 17 4.48 19 2c1 2 2 4.18 2 8 0 5.5-4.78 10-10 10Z"/><path d="M2 21c0-3 1.85-5.36 5.08-6C9.5 14.52 12 13 13 12"/></svg>`;
+        }
+
+        const newMarker = new maplibregl.Marker({
+          element: el,
+          draggable: canEdit
+        })
+          .setLngLat([marker.longitude, marker.latitude])
+          .addTo(map);
+
+        // Click handler
+        el.addEventListener('click', (e) => {
+          e.stopPropagation();
+          onMarkerClick(marker);
+          
+          // Fly to marker
+          map.flyTo({
+            center: [marker.longitude, marker.latitude],
+            zoom: 20,
+            speed: 1.2,
+            curve: 1.42
+          });
+        });
+
+        // Drag handlers
+        newMarker.on('dragend', () => {
+          const lngLat = newMarker.getLngLat();
+          onUpdatePosition({
+            ...marker,
+            longitude: lngLat.lng,
+            latitude: lngLat.lat
+          });
+        });
+
+        markersLayerRef.current[marker.id] = newMarker;
+      }
+    });
+  }, [isMapLoaded, markers, canEdit, onMarkerClick, onUpdatePosition]);
+
+  // Zoom to markers on initial load
+  useEffect(() => {
+    if (isMapLoaded && mapRef.current && markers.length > 0) {
+      const bounds = new maplibregl.LngLatBounds();
+      markers.forEach(m => bounds.extend([m.longitude, m.latitude]));
+      mapRef.current.fitBounds(bounds, { padding: 100, maxZoom: 18 });
+    }
+  }, [isMapLoaded]);
 
   return (
     <div className="relative w-full h-full">
@@ -580,20 +231,15 @@ const MapComponent: React.FC<MapComponentProps> = ({
         )}
       </AnimatePresence>
 
-      {viewerReady && viewerRef.current && (
-        <MarkerOverlay
-          viewer={viewerRef.current}
-          markers={markers}
-          onMarkerClick={(marker) => {
-            if (!draggedRef.current) {
-              zoomToMarker(marker);
-              onMarkerClick(marker);
-            }
-          }}
-          onDragStart={onDragStart}
-          canEdit={canEdit}
-        />
-      )}
+      {/* Zoom Level Indicator */}
+      <div className="absolute bottom-6 left-6 z-10 flex flex-col gap-2 pointer-events-none">
+        <div className="bg-black/40 backdrop-blur-md border border-white/10 px-3 py-1.5 rounded-full flex items-center gap-2 shadow-lg">
+          <div className="w-1.5 h-1.5 bg-emerald-500 rounded-full animate-pulse" />
+          <span className="text-[10px] font-mono font-medium text-white/80 uppercase tracking-widest">
+            Zoom {zoomLevel.toFixed(1)}
+          </span>
+        </div>
+      </div>
     </div>
   );
 };
@@ -608,23 +254,21 @@ export const GardenMap: React.FC = () => {
   const [authError, setAuthError] = useState<string | null>(null);
   const [showWelcome, setShowWelcome] = useState(false);
   const [activeType, setActiveType] = useState<'tree' | 'plant'>('plant');
-  const viewerRef = useRef<Cesium.Viewer | null>(null);
+  const mapRef = useRef<maplibregl.Map | null>(null);
 
-  // Handle Anonymous Auth for Firestore Rules
+  // Handle Anonymous Auth
   useEffect(() => {
     signInAnonymously(auth).catch(err => {
       if (err.code === 'auth/admin-restricted-operation') {
-        const msg = "Anonymous Authentication is disabled in your Firebase project. Please enable it in the Firebase Console (Authentication > Sign-in method > Anonymous).";
-        console.error(msg);
+        const msg = "Anonymous Authentication is disabled in your Firebase project. Please enable it in the Firebase Console.";
         setAuthError(msg);
       } else {
-        console.error("Anonymous Auth Error:", err);
         setAuthError(err.message);
       }
     });
   }, []);
 
-  // Sync with Firestore - ALL MARKERS (Shared Data Set)
+  // Sync with Firestore
   useEffect(() => {
     const q = query(collection(db, 'markers'));
     const unsubscribe = onSnapshot(q, (snapshot) => {
@@ -672,33 +316,18 @@ export const GardenMap: React.FC = () => {
       handleFirestoreError(e, OperationType.WRITE, `markers/${newMarker.id}`);
       return null;
     }
-  }, [canEdit]);
+  }, [canEdit, activeType]);
 
   const addMarkerAtCenter = async () => {
-    if (!viewerRef.current || !canEdit) return;
-    const viewer = viewerRef.current;
-    const center = new Cesium.Cartesian2(viewer.canvas.clientWidth / 2, viewer.canvas.clientHeight / 2);
+    if (!mapRef.current || !canEdit) return;
+    const center = mapRef.current.getCenter();
+    const marker = await onMapClick({
+      lat: center.lat,
+      lng: center.lng
+    });
     
-    let cartesian;
-    if (viewer.scene.pickPositionSupported) {
-      cartesian = viewer.scene.pickPosition(center);
-    }
-    
-    if (!Cesium.defined(cartesian)) {
-      const ray = viewer.camera.getPickRay(center);
-      cartesian = viewer.scene.globe.pick(ray!, viewer.scene);
-    }
-
-    if (Cesium.defined(cartesian)) {
-      const cartographic = Cesium.Cartographic.fromCartesian(cartesian);
-      const marker = await onMapClick({
-        lat: Cesium.Math.toDegrees(cartographic.latitude),
-        lng: Cesium.Math.toDegrees(cartographic.longitude)
-      });
-      
-      if (marker) {
-        setSelectedMarker(marker);
-      }
+    if (marker) {
+      setSelectedMarker(marker);
     }
   };
 
@@ -740,10 +369,9 @@ export const GardenMap: React.FC = () => {
         onClosePopup={() => setSelectedMarker(null)}
         onUpdatePosition={updatePosition}
         deleteMarker={deleteMarker}
-        viewerRef={viewerRef}
+        mapRef={mapRef}
         canEdit={canEdit}
         onAnimationComplete={() => {
-          // Only show welcome if it's the first time
           if (!localStorage.getItem('welcome_shown')) {
             setShowWelcome(true);
           }
@@ -760,7 +388,6 @@ export const GardenMap: React.FC = () => {
               exit={{ opacity: 0, scale: 0.9, y: 20 }}
               className="bg-zinc-900 border border-white/10 p-8 rounded-[32px] shadow-2xl max-w-md w-full text-center relative overflow-hidden"
             >
-              {/* Decorative Background Element */}
               <div className="absolute -top-24 -right-24 w-48 h-48 bg-emerald-500/10 rounded-full blur-3xl pointer-events-none" />
               
               <div className="w-20 h-20 bg-emerald-500/20 rounded-3xl flex items-center justify-center mx-auto mb-8 rotate-3">
@@ -777,7 +404,7 @@ export const GardenMap: React.FC = () => {
                   <div>
                     <h4 className="text-white font-medium text-sm mb-1">Explore the Space</h4>
                     <p className="text-gray-400 text-xs leading-relaxed">
-                      Left-click and drag to rotate the view. Right-click or use two fingers to zoom. Middle-click or use two fingers to pan.
+                      Click and drag to pan the map. Use your mouse wheel or pinch to zoom.
                     </p>
                   </div>
                 </div>
@@ -789,7 +416,7 @@ export const GardenMap: React.FC = () => {
                   <div>
                     <h4 className="text-white font-medium text-sm mb-1">Discover Plants</h4>
                     <p className="text-gray-400 text-xs leading-relaxed">
-                      Click on any green leaf icon to view photos and details about the plants in our collection.
+                      Click on any leaf icon to view photos and details about the plants.
                     </p>
                   </div>
                 </div>
@@ -810,9 +437,9 @@ export const GardenMap: React.FC = () => {
       </AnimatePresence>
 
       {/* Controls */}
-      <div className="absolute top-0 left-0 z-10 flex flex-col gap-4 p-0">
+      <div className="absolute top-0 left-0 z-10 flex flex-col gap-4 p-4">
         {authError && (
-          <div className="m-2 p-2 bg-red-500/20 backdrop-blur-md border border-red-500/30 rounded-lg text-red-200 text-[10px] max-w-[150px] flex items-start gap-2">
+          <div className="p-2 bg-red-500/20 backdrop-blur-md border border-red-500/30 rounded-lg text-red-200 text-[10px] max-w-[150px] flex items-start gap-2">
             <AlertCircle size={14} className="shrink-0 mt-0.5" />
             <span>{authError}</span>
           </div>
@@ -820,10 +447,10 @@ export const GardenMap: React.FC = () => {
         {!isUnlocked ? (
           <button 
             onClick={() => setShowUnlockConfirm(true)}
-            className="w-6 h-6 bg-white/5 hover:bg-white/10 backdrop-blur-md rounded-full flex items-center justify-center text-white/10 hover:text-white/40 transition-all active:scale-95 group"
+            className="w-10 h-10 bg-white/5 hover:bg-white/10 backdrop-blur-md rounded-full flex items-center justify-center text-white/40 hover:text-white transition-all active:scale-95 group border border-white/10"
             title="Unlock Editing"
           >
-            <Pencil size={12} className="group-hover:scale-110 transition-transform" />
+            <Pencil size={18} className="group-hover:scale-110 transition-transform" />
           </button>
         ) : (
           <div className="flex flex-col gap-3">
@@ -897,7 +524,7 @@ export const GardenMap: React.FC = () => {
         )}
       </AnimatePresence>
 
-      {/* Popup Overlay - Minimalist - Positioned to the right to keep icon centered and visible */}
+      {/* Popup Overlay */}
       <AnimatePresence>
         {selectedMarker && (
           <div className="absolute inset-y-0 right-0 z-40 pointer-events-none flex items-center justify-end p-6 md:p-12">
