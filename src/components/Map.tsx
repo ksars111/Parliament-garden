@@ -47,6 +47,7 @@ const MapComponent: React.FC<MapComponentProps> = ({
   onAnimationComplete
 }) => {
   const containerRef = useRef<HTMLDivElement>(null);
+  const [isMapInitialized, setIsMapInitialized] = useState(false);
   const [isMapLoaded, setIsMapLoaded] = useState(false);
   const [zoomLevel, setZoomLevel] = useState(INITIAL_ZOOM);
   const markersLayerRef = useRef<Record<string, maplibregl.Marker>>({});
@@ -100,13 +101,19 @@ const MapComponent: React.FC<MapComponentProps> = ({
     });
 
     mapRef.current = map;
+    setIsMapInitialized(true);
 
-    map.on('load', () => {
+    map.on('style.load', () => {
       setIsMapLoaded(true);
       setZoomLevel(map.getZoom());
       if (onAnimationComplete) {
         onAnimationComplete();
       }
+    });
+
+    map.on('load', () => {
+      // Final load event for any remaining resources
+      setZoomLevel(map.getZoom());
     });
 
     map.on('zoom', () => {
@@ -128,7 +135,7 @@ const MapComponent: React.FC<MapComponentProps> = ({
 
   // Sync Markers
   useEffect(() => {
-    if (!isMapLoaded || !mapRef.current) return;
+    if (!isMapInitialized || !mapRef.current) return;
 
     const map = mapRef.current;
     const currentMarkerIds = new Set(markers.map(m => m.id));
@@ -220,16 +227,16 @@ const MapComponent: React.FC<MapComponentProps> = ({
         markersLayerRef.current[marker.id] = newMarker;
       }
     });
-  }, [isMapLoaded, markers, canEdit, onMarkerClick, onUpdatePosition]);
+  }, [isMapInitialized, markers, canEdit, onMarkerClick, onUpdatePosition]);
 
   // Zoom to markers on initial load
   useEffect(() => {
-    if (isMapLoaded && mapRef.current && markers.length > 0) {
+    if (isMapInitialized && mapRef.current && markers.length > 0) {
       const bounds = new maplibregl.LngLatBounds();
       markers.forEach(m => bounds.extend([m.longitude, m.latitude]));
       mapRef.current.fitBounds(bounds, { padding: 100, maxZoom: 17 });
     }
-  }, [isMapLoaded]);
+  }, [isMapInitialized]);
 
   return (
     <div className="relative w-full h-full">
