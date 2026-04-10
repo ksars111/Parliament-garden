@@ -93,7 +93,7 @@ const MarkerOverlay: React.FC<{
           el.style.zIndex = Math.round(1000000 - distance).toString();
           
           // Calculate scale based on distance (closer = bigger, further = smaller)
-          const scale = Math.max(0.4, Math.min(1.2, 150 / distance));
+          const scale = Math.max(0.4, Math.min(1.2, 300 / distance));
           const icon = el.querySelector('.marker-icon') as HTMLDivElement;
           if (icon) {
             icon.style.transform = `scale(${scale})`;
@@ -377,7 +377,7 @@ const MapComponent: React.FC<MapComponentProps> = ({
         // --- Camera Constraints ---
         const controller = viewer.scene.screenSpaceCameraController;
         controller.minimumZoomDistance = 50;   // Don't get too close to ground
-        controller.maximumZoomDistance = 1000; // Reduced to match 300m focus
+        controller.maximumZoomDistance = 1500; // Reduced to match 500m focus
 
         removeCameraListener = viewer.camera.changed.addEventListener(() => {
           if (!viewer || viewer.isDestroyed()) return;
@@ -389,10 +389,10 @@ const MapComponent: React.FC<MapComponentProps> = ({
           const lon = Cesium.Math.toDegrees(cartographic.longitude);
           const lat = Cesium.Math.toDegrees(cartographic.latitude);
 
-          // Calculate dynamic bounds based on markers (approx 300m margin)
-          // 300m is ~0.0027 deg lat, ~0.0034 deg lon at this latitude
-          const lonMargin = 0.0034; 
-          const latMargin = 0.0027; 
+          // Calculate dynamic bounds based on markers (approx 500m margin)
+          // 500m is ~0.0045 deg lat, ~0.0057 deg lon at this latitude
+          const lonMargin = 0.0057; 
+          const latMargin = 0.0045; 
 
           let minLon, maxLon, minLat, maxLat;
           
