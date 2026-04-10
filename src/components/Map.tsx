@@ -57,8 +57,8 @@ const MarkerOverlay: React.FC<{
         const el = markerRefs.current[marker.id];
         if (!el) return;
 
-        // Trees float higher (20m), plants sit closer (5m)
-        const floatingHeight = marker.type === 'tree' ? 20 : 5;
+        // Both trees and plants float at 20m
+        const floatingHeight = 20;
 
         // 1. Get ground position (terrain aware)
         let groundPos = Cesium.Cartesian3.fromDegrees(marker.longitude, marker.latitude, 0);
@@ -92,6 +92,13 @@ const MarkerOverlay: React.FC<{
           // Set z-index based on distance (closer = higher)
           el.style.zIndex = Math.round(1000000 - distance).toString();
           
+          // Calculate scale based on distance (closer = bigger, further = smaller)
+          const scale = Math.max(0.4, Math.min(1.2, 150 / distance));
+          const icon = el.querySelector('.marker-icon') as HTMLDivElement;
+          if (icon) {
+            icon.style.transform = `scale(${scale})`;
+          }
+
           // Update tether line
           const line = el.querySelector('.tether-line') as HTMLDivElement;
           if (line) {
@@ -132,7 +139,7 @@ const MarkerOverlay: React.FC<{
         >
            {/* The plant icon - clickable for details */}
            <div 
-             className={`w-10 h-10 ${marker.type === 'tree' ? 'bg-emerald-400' : 'bg-emerald-800'} rounded-full flex items-center justify-center shadow-lg border-2 border-white/40 relative z-10 overflow-hidden pointer-events-auto cursor-pointer`}
+             className={`marker-icon w-10 h-10 ${marker.type === 'tree' ? 'bg-emerald-400' : 'bg-emerald-800'} rounded-full flex items-center justify-center shadow-lg border-2 border-white/40 relative z-10 overflow-hidden pointer-events-auto cursor-pointer transition-transform duration-200 ease-out`}
              onClick={(e) => {
                e.stopPropagation();
                onMarkerClick(marker);
@@ -265,8 +272,8 @@ const MapComponent: React.FC<MapComponentProps> = ({
     if (!viewerRef.current) return;
     const viewer = viewerRef.current;
     
-    // Replicate floating height logic from MarkerOverlay
-    const floatingHeight = marker.type === 'tree' ? 20 : 5;
+    // Both trees and plants float at 20m
+    const floatingHeight = 20;
     
     // Get ground position (ellipsoid surface)
     let groundPos = Cesium.Cartesian3.fromDegrees(marker.longitude, marker.latitude, 0);
@@ -370,7 +377,7 @@ const MapComponent: React.FC<MapComponentProps> = ({
         // --- Camera Constraints ---
         const controller = viewer.scene.screenSpaceCameraController;
         controller.minimumZoomDistance = 50;   // Don't get too close to ground
-        controller.maximumZoomDistance = 3000; // Increased to allow seeing the 2km range
+        controller.maximumZoomDistance = 1000; // Reduced to match 300m focus
 
         removeCameraListener = viewer.camera.changed.addEventListener(() => {
           if (!viewer || viewer.isDestroyed()) return;
@@ -382,10 +389,10 @@ const MapComponent: React.FC<MapComponentProps> = ({
           const lon = Cesium.Math.toDegrees(cartographic.longitude);
           const lat = Cesium.Math.toDegrees(cartographic.latitude);
 
-          // Calculate dynamic bounds based on markers (approx 2km margin)
-          // 1km is ~0.009 deg lat, ~0.011 deg lon at this latitude
-          const lonMargin = 0.022; // ~2km
-          const latMargin = 0.018; // ~2km
+          // Calculate dynamic bounds based on markers (approx 300m margin)
+          // 300m is ~0.0027 deg lat, ~0.0034 deg lon at this latitude
+          const lonMargin = 0.0034; 
+          const latMargin = 0.0027; 
 
           let minLon, maxLon, minLat, maxLat;
           
@@ -425,6 +432,13 @@ const MapComponent: React.FC<MapComponentProps> = ({
               }
             });
           }
+
+          // Performance Optimization: Limit rendering to the active area
+          const limitRect = Cesium.Rectangle.fromDegrees(
+            minLon - 0.001, minLat - 0.001, // Adding tiny buffer
+            maxLon + 0.001, maxLat + 0.001
+          );
+          viewer.scene.globe.cartographicLimitRectangle = limitRect;
         });
         // ---------------------------
 
