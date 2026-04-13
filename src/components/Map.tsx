@@ -16,8 +16,50 @@ import {
   query, 
   OperationType,
   handleFirestoreError,
-  signInAnonymously
+  signInAnonymously,
+  getDocFromServer
 } from '../firebase';
+
+// Error Boundary Component
+class ErrorBoundary extends React.Component<{ children: React.ReactNode }, { hasError: boolean; error: any }> {
+  constructor(props: any) {
+    super(props);
+    this.state = { hasError: false, error: null };
+  }
+
+  static getDerivedStateFromError(error: any) {
+    return { hasError: true, error };
+  }
+
+  render() {
+    if (this.state.hasError) {
+      let message = "Something went wrong.";
+      try {
+        const errObj = JSON.parse(this.state.error.message);
+        if (errObj.error.includes('offline')) {
+          message = "Database is currently offline or unavailable. Please check your connection.";
+        }
+      } catch (e) {
+        // Not a JSON error
+      }
+      
+      return (
+        <div className="flex flex-col items-center justify-center h-screen bg-gray-900 text-white p-6 text-center">
+          <AlertCircle size={48} className="text-red-500 mb-4" />
+          <h2 className="text-xl font-bold mb-2">Application Error</h2>
+          <p className="text-gray-400 max-w-md mb-6">{message}</p>
+          <button 
+            onClick={() => window.location.reload()}
+            className="px-6 py-2 bg-emerald-500 rounded-lg font-medium"
+          >
+            Retry
+          </button>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
 
 // Parliament of Victoria, Melbourne
 const INITIAL_CENTER: [number, number] = [144.9742, -37.8108];
@@ -245,17 +287,36 @@ const MapComponent: React.FC<MapComponentProps> = ({
 };
 
 export const GardenMap: React.FC = () => {
+  return (
+    <ErrorBoundary>
+      <GardenMapContent />
+    </ErrorBoundary>
+  );
+};
+
+const GardenMapContent: React.FC = () => {
   const [markers, setMarkers] = useState<PlantMarker[]>([]);
   const [isUnlocked, setIsUnlocked] = useState(true); // Default to unlocked for live editing
   const [selectedMarker, setSelectedMarker] = useState<PlantMarker | null>(null);
   const [showWelcome, setShowWelcome] = useState(false);
   const mapRef = useRef<maplibregl.Map | null>(null);
 
-  // Handle Anonymous Auth
+  // Handle Anonymous Auth and Connection Test
   useEffect(() => {
-    signInAnonymously(auth).catch(err => {
-      console.warn("Anonymous Auth failed, using local session:", err.message);
-    });
+    const init = async () => {
+      try {
+        await signInAnonymously(auth);
+        // Test connection
+        await getDocFromServer(doc(db, 'test', 'connection'));
+      } catch (err: any) {
+        console.warn("Auth or Connection test failed:", err.message);
+        if (err.message.includes('offline')) {
+          // This will be caught by ErrorBoundary if we throw, 
+          // but for now we'll just log and let onSnapshot handle it
+        }
+      }
+    };
+    init();
   }, []);
 
   // Sync with Firestore
