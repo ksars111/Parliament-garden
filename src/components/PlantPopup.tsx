@@ -1,5 +1,5 @@
-import React, { useState, useRef } from 'react';
-import { X, Save, Trash2, Camera, Upload, Maximize2 } from 'lucide-react';
+import React, { useState, useRef, useEffect } from 'react';
+import { X, Save, Trash2, Camera, Upload, Maximize2, Check } from 'lucide-react';
 import { PlantMarker } from '../types';
 import { motion, AnimatePresence } from 'motion/react';
 
@@ -19,18 +19,43 @@ export const PlantPopup: React.FC<PlantPopupProps> = ({ marker, onSave, onDelete
   const [isEditing, setIsEditing] = useState(false);
   const [isExpanded, setIsExpanded] = useState(false);
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
+  // Auto-save logic
+  useEffect(() => {
+    if (!isEditing) return;
+
+    // Debounce save
+    if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
+    
+    setIsSaving(true);
+    saveTimeoutRef.current = setTimeout(() => {
+      onSave({ ...marker, name, description, imageUrl, type });
+      setIsSaving(false);
+    }, 1000);
+
+    return () => {
+      if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
+    };
+  }, [name, description, imageUrl, type, isEditing]);
+
+  // Sync state when marker changes from external source (live updates)
+  useEffect(() => {
+    if (!isEditing) {
+      setName(marker.name);
+      setDescription(marker.description);
+      setImageUrl(marker.imageUrl);
+      setType(marker.type);
+    }
+  }, [marker, isEditing]);
 
   const TRUNCATE_LIMIT = 150;
   const shouldTruncate = description.length > TRUNCATE_LIMIT;
   const displayDescription = (shouldTruncate && !isExpanded) 
     ? `${description.slice(0, TRUNCATE_LIMIT)}...` 
     : description;
-
-  const handleSave = () => {
-    onSave({ ...marker, name, description, imageUrl, type });
-    setIsEditing(false);
-  };
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -155,17 +180,15 @@ export const PlantPopup: React.FC<PlantPopupProps> = ({ marker, onSave, onDelete
               </div>
               <div className="flex gap-2 pt-2">
                 <button
-                  onClick={handleSave}
+                  onClick={() => setIsEditing(false)}
                   className="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white py-2 rounded-lg text-sm font-medium flex items-center justify-center gap-2 transition-colors"
                 >
-                  <Save size={16} />
-                  Save Changes
-                </button>
-                <button
-                  onClick={() => setIsEditing(false)}
-                  className="px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-600 rounded-lg text-sm font-medium transition-colors"
-                >
-                  Cancel
+                  {isSaving ? (
+                    <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                  ) : (
+                    <Check size={16} />
+                  )}
+                  Done Editing
                 </button>
               </div>
             </div>

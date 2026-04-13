@@ -2,26 +2,24 @@ import React, { useState, useCallback, useEffect, useRef } from 'react';
 import maplibregl from 'maplibre-gl';
 import 'maplibre-gl/dist/maplibre-gl.css';
 import { Leaf, Plus, Map as MapIcon, Info, List, Search, X, ChevronRight, Pencil, ShieldCheck, AlertCircle } from 'lucide-react';
+import { io, Socket } from 'socket.io-client';
 import { PlantMarker } from '../types';
 import { PlantPopup } from './PlantPopup';
 import { motion, AnimatePresence } from 'motion/react';
-import { 
-  auth, 
-  db, 
-  collection, 
-  doc, 
-  setDoc, 
-  deleteDoc, 
-  onSnapshot, 
-  query, 
-  OperationType,
-  handleFirestoreError,
-  signInAnonymously
-} from '../firebase';
 
 // Parliament of Victoria, Melbourne
 const INITIAL_CENTER: [number, number] = [144.9742, -37.8108];
 const INITIAL_ZOOM = 17;
+
+// Generate a simple persistent UID for the session
+const getSessionUid = () => {
+  let uid = localStorage.getItem('garden_user_uid');
+  if (!uid) {
+    uid = Math.random().toString(36).substring(2, 15);
+    localStorage.setItem('garden_user_uid', uid);
+  }
+  return uid;
+};
 
 interface MapComponentProps {
   markers: PlantMarker[];
@@ -246,50 +244,55 @@ const MapComponent: React.FC<MapComponentProps> = ({
 
 export const GardenMap: React.FC = () => {
   const [markers, setMarkers] = useState<PlantMarker[]>([]);
-  const [isUnlocked, setIsUnlocked] = useState(() => {
-    return sessionStorage.getItem('garden_unlocked') === 'true';
-  });
-  const [showUnlockConfirm, setShowUnlockConfirm] = useState(false);
+  const [isUnlocked, setIsUnlocked] = useState(true); // Default to unlocked for live editing
   const [selectedMarker, setSelectedMarker] = useState<PlantMarker | null>(null);
-  const [authError, setAuthError] = useState<string | null>(null);
   const [showWelcome, setShowWelcome] = useState(false);
-  const [activeType, setActiveType] = useState<'tree' | 'plant'>('plant');
   const mapRef = useRef<maplibregl.Map | null>(null);
+  const socketRef = useRef<Socket | null>(null);
 
-  // Handle Anonymous Auth
+  // Initialize Socket.io and fetch initial data
   useEffect(() => {
-    signInAnonymously(auth).catch(err => {
-      if (err.code === 'auth/admin-restricted-operation') {
-        const msg = "Anonymous Authentication is disabled in your Firebase project. Please enable it in the Firebase Console.";
-        setAuthError(msg);
-      } else {
-        setAuthError(err.message);
-      }
-    });
-  }, []);
+    // Fetch initial markers
+    fetch('/api/markers')
+      .then(res => res.json())
+      .then(data => setMarkers(data))
+      .catch(err => console.error('Failed to fetch markers:', err));
 
-  // Sync with Firestore
-  useEffect(() => {
-    const q = query(collection(db, 'markers'));
-    const unsubscribe = onSnapshot(q, (snapshot) => {
-      const newMarkers = snapshot.docs.map(doc => doc.data() as PlantMarker);
-      setMarkers(newMarkers);
-    }, (error) => {
-      handleFirestoreError(error, OperationType.LIST, 'markers');
+    // Connect to Socket.io
+    const socket = io();
+    socketRef.current = socket;
+
+    socket.on('marker_updated', (updatedMarker: PlantMarker) => {
+      setMarkers(prev => {
+        const index = prev.findIndex(m => m.id === updatedMarker.id);
+        if (index !== -1) {
+          const newMarkers = [...prev];
+          newMarkers[index] = updatedMarker;
+          return newMarkers;
+        }
+        return [...prev, updatedMarker];
+      });
+      
+      // Update selected marker if it's the one that was updated
+      setSelectedMarker(prev => prev?.id === updatedMarker.id ? updatedMarker : prev);
     });
 
-    return () => unsubscribe();
+    socket.on('marker_deleted', (id: string) => {
+      setMarkers(prev => prev.filter(m => m.id !== id));
+      setSelectedMarker(prev => prev?.id === id ? null : prev);
+    });
+
+    return () => {
+      socket.disconnect();
+    };
   }, []);
 
   const handleUnlockEditing = () => {
     setIsUnlocked(true);
-    sessionStorage.setItem('garden_unlocked', 'true');
-    setShowUnlockConfirm(false);
   };
 
   const handleLockEditing = () => {
     setIsUnlocked(false);
-    sessionStorage.removeItem('garden_unlocked');
   };
 
   const canEdit = isUnlocked;
@@ -299,24 +302,29 @@ export const GardenMap: React.FC = () => {
 
     const newMarker: PlantMarker = {
       id: Math.random().toString(36).substr(2, 9),
-      uid: auth.currentUser?.uid || 'anonymous',
+      uid: getSessionUid(),
       latitude: lngLat.lat,
       longitude: lngLat.lng,
-      name: activeType === 'tree' ? 'New Tree' : 'New Plant',
+      name: 'New Tree',
       description: '',
       imageUrl: `https://picsum.photos/seed/${Math.random()}/400/300`,
       createdAt: Date.now(),
-      type: activeType
+      type: 'tree'
     };
 
     try {
-      await setDoc(doc(db, 'markers', newMarker.id), newMarker);
+      const res = await fetch('/api/markers', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(newMarker)
+      });
+      if (!res.ok) throw new Error('Failed to save marker');
       return newMarker;
     } catch (e) {
-      handleFirestoreError(e, OperationType.WRITE, `markers/${newMarker.id}`);
+      console.error(e);
       return null;
     }
-  }, [canEdit, activeType]);
+  }, [canEdit]);
 
   const addMarkerAtCenter = async () => {
     if (!mapRef.current || !canEdit) return;
@@ -334,29 +342,35 @@ export const GardenMap: React.FC = () => {
   const updateMarker = async (updated: PlantMarker) => {
     if (!canEdit) return;
     try {
-      await setDoc(doc(db, 'markers', updated.id), updated, { merge: true });
-      setSelectedMarker(updated);
+      await fetch('/api/markers', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(updated)
+      });
     } catch (e) {
-      handleFirestoreError(e, OperationType.WRITE, `markers/${updated.id}`);
+      console.error(e);
     }
   };
 
   const updatePosition = async (updated: PlantMarker) => {
     if (!canEdit) return;
     try {
-      await setDoc(doc(db, 'markers', updated.id), updated, { merge: true });
+      await fetch('/api/markers', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(updated)
+      });
     } catch (e) {
-      handleFirestoreError(e, OperationType.WRITE, `markers/${updated.id}`);
+      console.error(e);
     }
   };
 
   const deleteMarker = async (id: string) => {
     if (!canEdit) return;
     try {
-      await deleteDoc(doc(db, 'markers', id));
-      setSelectedMarker(null);
+      await fetch(`/api/markers/${id}`, { method: 'DELETE' });
     } catch (e) {
-      handleFirestoreError(e, OperationType.DELETE, `markers/${id}`);
+      console.error(e);
     }
   };
 
@@ -438,15 +452,9 @@ export const GardenMap: React.FC = () => {
 
       {/* Controls */}
       <div className="absolute top-0 left-0 z-10 flex flex-col gap-4 p-4">
-        {authError && (
-          <div className="p-2 bg-red-500/20 backdrop-blur-md border border-red-500/30 rounded-lg text-red-200 text-[10px] max-w-[150px] flex items-start gap-2">
-            <AlertCircle size={14} className="shrink-0 mt-0.5" />
-            <span>{authError}</span>
-          </div>
-        )}
         {!isUnlocked ? (
           <button 
-            onClick={() => setShowUnlockConfirm(true)}
+            onClick={() => setIsUnlocked(true)}
             className="w-10 h-10 bg-white/5 hover:bg-white/10 backdrop-blur-md rounded-full flex items-center justify-center text-white/40 hover:text-white transition-all active:scale-95 group border border-white/10"
             title="Unlock Editing"
           >
@@ -454,26 +462,10 @@ export const GardenMap: React.FC = () => {
           </button>
         ) : (
           <div className="flex flex-col gap-3">
-            <div className="flex flex-col bg-black/40 backdrop-blur-md rounded-full p-1 border border-white/10">
-              <button
-                onClick={() => setActiveType('plant')}
-                className={`w-10 h-10 rounded-full flex items-center justify-center transition-all ${activeType === 'plant' ? 'bg-emerald-800 text-white' : 'text-white/40 hover:text-white/60'}`}
-                title="Select Plant Type"
-              >
-                <Leaf size={18} />
-              </button>
-              <button
-                onClick={() => setActiveType('tree')}
-                className={`w-10 h-10 rounded-full flex items-center justify-center transition-all ${activeType === 'tree' ? 'bg-emerald-400 text-white' : 'text-white/40 hover:text-white/60'}`}
-                title="Select Tree Type"
-              >
-                <Leaf size={24} />
-              </button>
-            </div>
             <button 
               onClick={addMarkerAtCenter}
               className="w-10 h-10 bg-emerald-500 hover:bg-emerald-600 backdrop-blur-md border border-emerald-500/30 rounded-full flex items-center justify-center text-white transition-all active:scale-95 shadow-xl"
-              title={`Add ${activeType === 'tree' ? 'Tree' : 'Plant'}`}
+              title="Add Tree"
             >
               <Plus size={20} strokeWidth={1.5} />
             </button>
@@ -488,41 +480,7 @@ export const GardenMap: React.FC = () => {
         )}
       </div>
 
-      {/* Unlock Confirmation Popup */}
-      <AnimatePresence>
-        {showUnlockConfirm && (
-          <div className="absolute inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm">
-            <motion.div 
-              initial={{ opacity: 0, scale: 0.9, y: 20 }}
-              animate={{ opacity: 1, scale: 1, y: 0 }}
-              exit={{ opacity: 0, scale: 0.9, y: 20 }}
-              className="bg-zinc-900/90 border border-white/10 p-8 rounded-[32px] shadow-2xl max-w-sm w-full text-center"
-            >
-              <div className="w-16 h-16 bg-emerald-500/20 rounded-full flex items-center justify-center mx-auto mb-6">
-                <Pencil className="text-emerald-500" size={32} />
-              </div>
-              <h2 className="text-2xl font-semibold text-white mb-2">Enter Edit Mode?</h2>
-              <p className="text-gray-400 mb-8 text-sm leading-relaxed">
-                You will be able to add new plants and move existing ones around the garden.
-              </p>
-              <div className="flex flex-col gap-3">
-                <button 
-                  onClick={handleUnlockEditing}
-                  className="w-full py-4 bg-emerald-500 hover:bg-emerald-600 text-white rounded-2xl font-medium transition-colors"
-                >
-                  Yes, start editing
-                </button>
-                <button 
-                  onClick={() => setShowUnlockConfirm(false)}
-                  className="w-full py-4 bg-white/5 hover:bg-white/10 text-white/60 hover:text-white rounded-2xl font-medium transition-colors"
-                >
-                  Maybe later
-                </button>
-              </div>
-            </motion.div>
-          </div>
-        )}
-      </AnimatePresence>
+      {/* Unlock Confirmation Popup removed for live feel */}
 
       {/* Popup Overlay */}
       <AnimatePresence>
