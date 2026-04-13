@@ -164,7 +164,7 @@ const MapComponent: React.FC<MapComponentProps> = ({
         
         // Inner wrapper for visual style and hover effects
         const inner = document.createElement('div');
-        inner.className = `w-10 h-10 ${marker.type === 'tree' ? 'bg-emerald-400' : 'bg-emerald-800'} rounded-full flex items-center justify-center shadow-lg border-2 border-white/40 overflow-hidden transition-transform duration-200 hover:scale-110 active:scale-95`;
+        inner.className = `marker-inner ${marker.type === 'tree' ? 'bg-emerald-400' : 'bg-emerald-800'} rounded-full flex items-center justify-center shadow-lg border-white/40 overflow-hidden`;
         el.appendChild(inner);
         
         if (marker.imageUrl) {
@@ -240,7 +240,7 @@ const MapComponent: React.FC<MapComponentProps> = ({
 
   return (
     <div className="relative w-full h-full">
-      <div ref={containerRef} className="w-full h-full bg-gray-900" />
+      <div ref={containerRef} className={`w-full h-full bg-gray-900 ${zoomLevel >= 19 ? 'zoom-high' : 'zoom-low'}`} />
       
       <AnimatePresence>
         {!isMapLoaded && (
@@ -411,9 +411,7 @@ export const GardenMap: React.FC = () => {
         mapRef={mapRef}
         canEdit={canEdit}
         onAnimationComplete={() => {
-          if (!localStorage.getItem('welcome_shown')) {
-            setShowWelcome(true);
-          }
+          setShowWelcome(true);
         }}
       />
 
@@ -464,7 +462,6 @@ export const GardenMap: React.FC = () => {
               <button
                 onClick={() => {
                   setShowWelcome(false);
-                  localStorage.setItem('welcome_shown', 'true');
                 }}
                 className="w-full py-4 bg-emerald-500 hover:bg-emerald-600 text-white rounded-2xl font-semibold transition-all shadow-lg shadow-emerald-500/20 active:scale-[0.98]"
               >
