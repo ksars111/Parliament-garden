@@ -64,17 +64,21 @@ service cloud.firestore {
     match /markers/{markerId} {
       allow read: if true;
       
+      // Allow authenticated users to create markers
       allow create: if isAuthenticated() && 
                     isValidMarker(request.resource.data) && 
                     request.resource.data.uid == request.auth.uid &&
                     request.resource.data.id == markerId;
       
-      allow update: if (isDocOwner() || isAdmin()) && 
+      // Allow any authenticated user to update for this collaborative demo
+      allow update: if isAuthenticated() && 
                     isValidMarker(request.resource.data) &&
                     request.resource.data.uid == resource.data.uid &&
                     request.resource.data.id == resource.data.id;
                     
-      allow delete: if isDocOwner() || isAdmin();
+      // Allow any authenticated user to delete for this collaborative demo
+      // In a production app, we would restrict this to owners or admins
+      allow delete: if isAuthenticated();
     }
 
     match /test/connection {

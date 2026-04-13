@@ -9,13 +9,21 @@ import {
   query, 
   getDocFromServer 
 } from 'firebase/firestore';
-import { getAuth, signInAnonymously } from 'firebase/auth';
+import { 
+  getAuth, 
+  signInAnonymously, 
+  GoogleAuthProvider, 
+  signInWithPopup, 
+  signOut, 
+  onAuthStateChanged 
+} from 'firebase/auth';
 import firebaseConfig from '../firebase-applet-config.json';
 
 // Initialize Firebase SDK
 const app = initializeApp(firebaseConfig);
 export const db = getFirestore(app, firebaseConfig.firestoreDatabaseId);
 export const auth = getAuth(app);
+export const googleProvider = new GoogleAuthProvider();
 
 // Re-export Firestore methods for convenience
 export { 
@@ -26,7 +34,10 @@ export {
   onSnapshot, 
   query, 
   getDocFromServer,
-  signInAnonymously
+  signInAnonymously,
+  signInWithPopup,
+  signOut,
+  onAuthStateChanged
 };
 
 // Error Handling

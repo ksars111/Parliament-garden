@@ -17,9 +17,14 @@ import {
   OperationType,
   handleFirestoreError,
   signInAnonymously,
+  signInWithPopup,
+  signOut,
+  googleProvider,
+  onAuthStateChanged,
   getDocFromServer
 } from '../firebase';
 import { ErrorBoundary } from './ErrorBoundary';
+import { LogIn, LogOut, User } from 'lucide-react';
 
 // Parliament of Victoria, Melbourne
 const INITIAL_CENTER: [number, number] = [144.9742, -37.8108];
@@ -259,21 +264,41 @@ const GardenMapContent: React.FC = () => {
   const [isUnlocked, setIsUnlocked] = useState(true);
   const [selectedMarker, setSelectedMarker] = useState<PlantMarker | null>(null);
   const [showWelcome, setShowWelcome] = useState(false);
+  const [user, setUser] = useState(auth.currentUser);
   const mapRef = useRef<maplibregl.Map | null>(null);
 
-  // Handle Anonymous Auth and Connection Test
+  // Handle Auth State
   useEffect(() => {
-    const init = async () => {
-      try {
-        await signInAnonymously(auth);
-        // Test connection
-        await getDocFromServer(doc(db, 'test', 'connection'));
-      } catch (err: any) {
-        console.warn("Auth or Connection test failed:", err.message);
+    const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
+      setUser(currentUser);
+      if (!currentUser) {
+        signInAnonymously(auth).catch(err => console.error("Anonymous auth failed:", err));
       }
-    };
-    init();
+    });
+
+    // Initial connection test
+    getDocFromServer(doc(db, 'test', 'connection')).catch(err => {
+      console.warn("Initial connection test failed:", err.message);
+    });
+
+    return () => unsubscribe();
   }, []);
+
+  const handleLogin = async () => {
+    try {
+      await signInWithPopup(auth, googleProvider);
+    } catch (err) {
+      console.error("Login failed:", err);
+    }
+  };
+
+  const handleLogout = async () => {
+    try {
+      await signOut(auth);
+    } catch (err) {
+      console.error("Logout failed:", err);
+    }
+  };
 
   // Sync with Firestore
   useEffect(() => {
@@ -454,6 +479,37 @@ const GardenMapContent: React.FC = () => {
 
       {/* Controls */}
       <div className="absolute top-0 left-0 z-10 flex flex-col gap-4 p-4">
+        {/* Auth Button */}
+        <div className="flex items-center gap-2">
+          {user && !user.isAnonymous ? (
+            <div className="flex items-center gap-2 bg-black/40 backdrop-blur-md border border-white/10 p-1 pr-3 rounded-full">
+              {user.photoURL ? (
+                <img src={user.photoURL} alt="" className="w-8 h-8 rounded-full border border-white/20" />
+              ) : (
+                <div className="w-8 h-8 bg-emerald-500 rounded-full flex items-center justify-center text-white">
+                  <User size={16} />
+                </div>
+              )}
+              <span className="text-[10px] font-medium text-white/80 max-w-[80px] truncate">{user.displayName || user.email}</span>
+              <button 
+                onClick={handleLogout}
+                className="p-1.5 hover:bg-white/10 rounded-full text-white/40 hover:text-red-400 transition-colors"
+                title="Logout"
+              >
+                <LogOut size={14} />
+              </button>
+            </div>
+          ) : (
+            <button 
+              onClick={handleLogin}
+              className="h-10 px-4 bg-white/5 hover:bg-white/10 backdrop-blur-md border border-white/10 rounded-full flex items-center gap-2 text-white/60 hover:text-white transition-all text-xs font-medium"
+            >
+              <LogIn size={16} />
+              <span>Sign In</span>
+            </button>
+          )}
+        </div>
+
         {!isUnlocked ? (
           <button 
             onClick={() => setIsUnlocked(true)}
