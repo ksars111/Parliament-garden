@@ -172,14 +172,6 @@ const MapComponent: React.FC<MapComponentProps> = ({
         el.addEventListener('click', (e) => {
           e.stopPropagation();
           onMarkerClick(marker);
-          
-          // Fly to marker
-          map.flyTo({
-            center: [marker.longitude, marker.latitude],
-            zoom: 20,
-            speed: 1.2,
-            curve: 1.42
-          });
         });
 
         // Drag handlers
@@ -261,7 +253,7 @@ export const GardenMap: React.FC = () => {
 
 const GardenMapContent: React.FC = () => {
   const [markers, setMarkers] = useState<PlantMarker[]>([]);
-  const [isUnlocked, setIsUnlocked] = useState(true);
+  const [isUnlocked, setIsUnlocked] = useState(false);
   const [selectedMarker, setSelectedMarker] = useState<PlantMarker | null>(null);
   const [showWelcome, setShowWelcome] = useState(false);
   const [user, setUser] = useState(auth.currentUser);
@@ -333,12 +325,8 @@ const GardenMapContent: React.FC = () => {
   const onMapClick = useCallback(async (lngLat: { lat: number; lng: number }) => {
     if (!canEdit) return null;
 
-    const currentUid = auth.currentUser?.uid;
-    if (!currentUid) {
-      console.error("User not authenticated");
-      return null;
-    }
-
+    const currentUid = auth.currentUser?.uid || 'anonymous';
+    
     const newMarker: PlantMarker = {
       id: Math.random().toString(36).substr(2, 9),
       uid: currentUid,
@@ -479,37 +467,6 @@ const GardenMapContent: React.FC = () => {
 
       {/* Controls */}
       <div className="absolute top-0 left-0 z-10 flex flex-col gap-4 p-4">
-        {/* Auth Button */}
-        <div className="flex items-center gap-2">
-          {user && !user.isAnonymous ? (
-            <div className="flex items-center gap-2 bg-black/40 backdrop-blur-md border border-white/10 p-1 pr-3 rounded-full">
-              {user.photoURL ? (
-                <img src={user.photoURL} alt="" className="w-8 h-8 rounded-full border border-white/20" />
-              ) : (
-                <div className="w-8 h-8 bg-emerald-500 rounded-full flex items-center justify-center text-white">
-                  <User size={16} />
-                </div>
-              )}
-              <span className="text-[10px] font-medium text-white/80 max-w-[80px] truncate">{user.displayName || user.email}</span>
-              <button 
-                onClick={handleLogout}
-                className="p-1.5 hover:bg-white/10 rounded-full text-white/40 hover:text-red-400 transition-colors"
-                title="Logout"
-              >
-                <LogOut size={14} />
-              </button>
-            </div>
-          ) : (
-            <button 
-              onClick={handleLogin}
-              className="h-10 px-4 bg-white/5 hover:bg-white/10 backdrop-blur-md border border-white/10 rounded-full flex items-center gap-2 text-white/60 hover:text-white transition-all text-xs font-medium"
-            >
-              <LogIn size={16} />
-              <span>Sign In</span>
-            </button>
-          )}
-        </div>
-
         {!isUnlocked ? (
           <button 
             onClick={() => setIsUnlocked(true)}

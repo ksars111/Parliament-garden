@@ -37,14 +37,13 @@ service cloud.firestore {
     }
 
     function isValidMarker(data) {
-      return data.keys().hasAll(['id', 'uid', 'latitude', 'longitude', 'name', 'createdAt', 'type']) &&
+      return data.keys().hasAll(['id', 'latitude', 'longitude', 'name', 'createdAt', 'type']) &&
              data.id is string && data.id.size() > 0 &&
-             data.uid is string && data.uid.size() > 0 &&
              data.latitude is number &&
              data.longitude is number &&
-             data.name is string && data.name.size() > 0 && data.name.size() <= 100 &&
-             (!('description' in data) || (data.description is string && data.description.size() <= 2000)) &&
-             (!('imageUrl' in data) || (data.imageUrl is string && data.imageUrl.size() <= 1048576)) &&
+             data.name is string && data.name.size() > 0 && data.name.size() <= 500 &&
+             data.get('description', '') is string && data.get('description', '').size() <= 10000 &&
+             data.get('imageUrl', '') is string && data.get('imageUrl', '').size() <= 1000000 &&
              data.createdAt is number &&
              data.type in ['tree', 'plant'];
     }
@@ -64,21 +63,16 @@ service cloud.firestore {
     match /markers/{markerId} {
       allow read: if true;
       
-      // Allow authenticated users to create markers
-      allow create: if isAuthenticated() && 
-                    isValidMarker(request.resource.data) && 
-                    request.resource.data.uid == request.auth.uid &&
+      // Allow public creation of markers
+      allow create: if isValidMarker(request.resource.data) && 
                     request.resource.data.id == markerId;
       
-      // Allow any authenticated user to update for this collaborative demo
-      allow update: if isAuthenticated() && 
-                    isValidMarker(request.resource.data) &&
-                    request.resource.data.uid == resource.data.uid &&
-                    request.resource.data.id == resource.data.id;
+      // Allow public updates for this collaborative demo
+      allow update: if isValidMarker(request.resource.data) &&
+                    request.resource.data.id == markerId;
                     
-      // Allow any authenticated user to delete for this collaborative demo
-      // In a production app, we would restrict this to owners or admins
-      allow delete: if isAuthenticated();
+      // Allow public deletion for this collaborative demo
+      allow delete: if true;
     }
 
     match /test/connection {

@@ -12,10 +12,10 @@ interface PlantPopupProps {
 }
 
 export const PlantPopup: React.FC<PlantPopupProps> = ({ marker, onSave, onDelete, onClose, canEdit = false }) => {
-  const [name, setName] = useState(marker.name);
-  const [description, setDescription] = useState(marker.description);
-  const [imageUrl, setImageUrl] = useState(marker.imageUrl);
-  const [type, setType] = useState(marker.type);
+  const [name, setName] = useState(marker.name || '');
+  const [description, setDescription] = useState(marker.description || '');
+  const [imageUrl, setImageUrl] = useState(marker.imageUrl || '');
+  const [type, setType] = useState(marker.type || 'tree');
   const [isEditing, setIsEditing] = useState(false);
   const [isExpanded, setIsExpanded] = useState(false);
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -44,10 +44,10 @@ export const PlantPopup: React.FC<PlantPopupProps> = ({ marker, onSave, onDelete
   // Sync state when marker changes from external source (live updates)
   useEffect(() => {
     if (!isEditing) {
-      setName(marker.name);
-      setDescription(marker.description);
-      setImageUrl(marker.imageUrl);
-      setType(marker.type);
+      setName(marker.name || '');
+      setDescription(marker.description || '');
+      setImageUrl(marker.imageUrl || '');
+      setType(marker.type || 'tree');
     }
   }, [marker, isEditing]);
 
@@ -60,9 +60,9 @@ export const PlantPopup: React.FC<PlantPopupProps> = ({ marker, onSave, onDelete
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
-      // Basic size check (1MB) to prevent Firestore document size overflow
-      if (file.size > 1 * 1024 * 1024) {
-        alert("Image is too large. Please select an image under 1MB.");
+      // Strict 800KB check to stay well within Firestore's 1MB document limit (accounting for base64 overhead)
+      if (file.size > 800 * 1024) {
+        alert("Image is too large. Please select an image under 800KB to ensure it can be saved.");
         return;
       }
 
