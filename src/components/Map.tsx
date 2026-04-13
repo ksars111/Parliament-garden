@@ -5,6 +5,20 @@ import { Leaf, Plus, Map as MapIcon, Info, List, Search, X, ChevronRight, Pencil
 import { PlantMarker } from '../types';
 import { PlantPopup } from './PlantPopup';
 import { motion, AnimatePresence } from 'motion/react';
+import { 
+  auth, 
+  db, 
+  collection, 
+  doc, 
+  setDoc, 
+  deleteDoc, 
+  onSnapshot, 
+  query, 
+  OperationType,
+  handleFirestoreError,
+  signInAnonymously,
+  getDocFromServer
+} from '../firebase';
 import { ErrorBoundary } from './ErrorBoundary';
 
 // Parliament of Victoria, Melbourne
@@ -153,6 +167,14 @@ const MapComponent: React.FC<MapComponentProps> = ({
         el.addEventListener('click', (e) => {
           e.stopPropagation();
           onMarkerClick(marker);
+          
+          // Fly to marker
+          map.flyTo({
+            center: [marker.longitude, marker.latitude],
+            zoom: 20,
+            speed: 1.2,
+            curve: 1.42
+          });
         });
 
         // Drag handlers
@@ -170,7 +192,14 @@ const MapComponent: React.FC<MapComponentProps> = ({
     });
   }, [isMapLoaded, markers, canEdit, onMarkerClick, onUpdatePosition]);
 
-  // Zoom to markers on initial load removed
+  // Zoom to markers on initial load
+  useEffect(() => {
+    if (isMapLoaded && mapRef.current && markers.length > 0) {
+      const bounds = new maplibregl.LngLatBounds();
+      markers.forEach(m => bounds.extend([m.longitude, m.latitude]));
+      mapRef.current.fitBounds(bounds, { padding: 100, maxZoom: 17 });
+    }
+  }, [isMapLoaded]);
 
   return (
     <div className="relative w-full h-full">
@@ -226,19 +255,45 @@ export const GardenMap: React.FC = () => {
 };
 
 const GardenMapContent: React.FC = () => {
-  const [markers, setMarkers] = useState<PlantMarker[]>(() => {
-    const saved = localStorage.getItem('garden_markers');
-    return saved ? JSON.parse(saved) : [];
-  });
+  const [markers, setMarkers] = useState<PlantMarker[]>([]);
   const [isUnlocked, setIsUnlocked] = useState(true);
   const [selectedMarker, setSelectedMarker] = useState<PlantMarker | null>(null);
   const [showWelcome, setShowWelcome] = useState(false);
   const mapRef = useRef<maplibregl.Map | null>(null);
 
-  // Persist markers to localStorage
+  // Handle Anonymous Auth and Connection Test
   useEffect(() => {
-    localStorage.setItem('garden_markers', JSON.stringify(markers));
-  }, [markers]);
+    const init = async () => {
+      try {
+        await signInAnonymously(auth);
+        // Test connection
+        await getDocFromServer(doc(db, 'test', 'connection'));
+      } catch (err: any) {
+        console.warn("Auth or Connection test failed:", err.message);
+      }
+    };
+    init();
+  }, []);
+
+  // Sync with Firestore
+  useEffect(() => {
+    const q = query(collection(db, 'markers'));
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      const newMarkers = snapshot.docs.map(doc => doc.data() as PlantMarker);
+      setMarkers(newMarkers);
+      
+      // Update selected marker if it's the one that was updated
+      setSelectedMarker(prev => {
+        if (!prev) return null;
+        const updated = newMarkers.find(m => m.id === prev.id);
+        return updated || null;
+      });
+    }, (error) => {
+      handleFirestoreError(error, OperationType.LIST, 'markers');
+    });
+
+    return () => unsubscribe();
+  }, []);
 
   const handleUnlockEditing = () => {
     setIsUnlocked(true);
@@ -253,9 +308,15 @@ const GardenMapContent: React.FC = () => {
   const onMapClick = useCallback(async (lngLat: { lat: number; lng: number }) => {
     if (!canEdit) return null;
 
+    const currentUid = auth.currentUser?.uid;
+    if (!currentUid) {
+      console.error("User not authenticated");
+      return null;
+    }
+
     const newMarker: PlantMarker = {
       id: Math.random().toString(36).substr(2, 9),
-      uid: 'local-user',
+      uid: currentUid,
       latitude: lngLat.lat,
       longitude: lngLat.lng,
       name: 'New Tree',
@@ -265,8 +326,13 @@ const GardenMapContent: React.FC = () => {
       type: 'tree'
     };
 
-    setMarkers(prev => [...prev, newMarker]);
-    return newMarker;
+    try {
+      await setDoc(doc(db, 'markers', newMarker.id), newMarker);
+      return newMarker;
+    } catch (e) {
+      handleFirestoreError(e, OperationType.WRITE, `markers/${newMarker.id}`);
+      return null;
+    }
   }, [canEdit]);
 
   const addMarkerAtCenter = async () => {
@@ -283,16 +349,31 @@ const GardenMapContent: React.FC = () => {
   };
 
   const updateMarker = async (updated: PlantMarker) => {
-    setMarkers(prev => prev.map(m => m.id === updated.id ? updated : m));
+    if (!canEdit) return;
+    try {
+      await setDoc(doc(db, 'markers', updated.id), updated, { merge: true });
+    } catch (e) {
+      handleFirestoreError(e, OperationType.WRITE, `markers/${updated.id}`);
+    }
   };
 
   const updatePosition = async (updated: PlantMarker) => {
-    setMarkers(prev => prev.map(m => m.id === updated.id ? updated : m));
+    if (!canEdit) return;
+    try {
+      await setDoc(doc(db, 'markers', updated.id), updated, { merge: true });
+    } catch (e) {
+      handleFirestoreError(e, OperationType.WRITE, `markers/${updated.id}`);
+    }
   };
 
   const deleteMarker = async (id: string) => {
-    setMarkers(prev => prev.filter(m => m.id !== id));
-    setSelectedMarker(null);
+    if (!canEdit) return;
+    try {
+      await deleteDoc(doc(db, 'markers', id));
+      setSelectedMarker(null);
+    } catch (e) {
+      handleFirestoreError(e, OperationType.DELETE, `markers/${id}`);
+    }
   };
 
   return (

@@ -1,0 +1,89 @@
+// ===============================================================
+// Assumed Data Model
+// ===============================================================
+//
+// Collection: markers
+// Document ID: {markerId}
+// Fields:
+//   - id: string (required) - Unique ID
+//   - uid: string (required) - User ID of creator
+//   - latitude: number (required) - Latitude
+//   - longitude: number (required) - Longitude
+//   - name: string (required) - Plant name
+//   - description: string (optional) - Description
+//   - imageUrl: string (optional) - Image URL
+//   - createdAt: number (required) - Creation timestamp
+//   - type: string (required, enum: ['tree', 'plant']) - Marker type
+//
+// ===============================================================
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // ===============================================================
+    // Helper Functions
+    // ===============================================================
+    
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+    
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+    
+    function isDocOwner() {
+      return isAuthenticated() && request.auth.uid == resource.data.uid;
+    }
+
+    function isValidMarker(data) {
+      return data.keys().hasAll(['id', 'uid', 'latitude', 'longitude', 'name', 'createdAt', 'type']) &&
+             data.id is string && data.id.size() > 0 &&
+             data.uid is string && data.uid.size() > 0 &&
+             data.latitude is number &&
+             data.longitude is number &&
+             data.name is string && data.name.size() > 0 && data.name.size() <= 100 &&
+             (!('description' in data) || (data.description is string && data.description.size() <= 2000)) &&
+             (!('imageUrl' in data) || (data.imageUrl is string && data.imageUrl.size() <= 1048576)) &&
+             data.createdAt is number &&
+             data.type in ['tree', 'plant'];
+    }
+
+    function isAdmin() {
+      return isAuthenticated() &&
+        (
+          (request.auth.token.email == "karlsarsfield@gmail.com" && request.auth.token.email_verified == true) ||
+          (exists(/databases/$(database)/documents/users/$(request.auth.uid)) && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin')
+        );
+    }
+
+    // ===============================================================
+    // Rules
+    // ===============================================================
+
+    match /markers/{markerId} {
+      allow read: if true;
+      
+      allow create: if isAuthenticated() && 
+                    isValidMarker(request.resource.data) && 
+                    request.resource.data.uid == request.auth.uid &&
+                    request.resource.data.id == markerId;
+      
+      allow update: if (isDocOwner() || isAdmin()) && 
+                    isValidMarker(request.resource.data) &&
+                    request.resource.data.uid == resource.data.uid &&
+                    request.resource.data.id == resource.data.id;
+                    
+      allow delete: if isDocOwner() || isAdmin();
+    }
+
+    match /test/connection {
+      allow read: if true;
+    }
+    
+    match /users/{userId} {
+      allow read: if isOwner(userId) || isAdmin();
+      allow write: if isAdmin();
+    }
+  }
+}

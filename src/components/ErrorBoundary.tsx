@@ -32,9 +32,15 @@ export class ErrorBoundary extends React.Component<Props, State> {
       let details = "";
 
       try {
-        errorMessage = this.state.error?.message || errorMessage;
+        const parsed = JSON.parse(this.state.error?.message || "{}");
+        if (parsed.error) {
+          errorMessage = "Database Connection Issue";
+          details = parsed.error;
+        } else {
+          errorMessage = this.state.error?.message || errorMessage;
+        }
       } catch (e) {
-        // Fallback
+        errorMessage = this.state.error?.message || errorMessage;
       }
 
       return (

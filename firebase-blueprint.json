@@ -1,0 +1,27 @@
+{
+  "entities": {
+    "PlantMarker": {
+      "title": "Plant Marker",
+      "description": "A marker representing a tree or plant in the garden.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "description": "Unique identifier for the marker" },
+        "uid": { "type": "string", "description": "User ID of the creator" },
+        "latitude": { "type": "number", "description": "Latitude coordinate" },
+        "longitude": { "type": "number", "description": "Longitude coordinate" },
+        "name": { "type": "string", "description": "Name of the plant" },
+        "description": { "type": "string", "description": "Detailed description of the plant" },
+        "imageUrl": { "type": "string", "description": "URL of the plant image" },
+        "createdAt": { "type": "number", "description": "Timestamp of creation" },
+        "type": { "type": "string", "enum": ["tree", "plant"], "description": "Type of the marker" }
+      },
+      "required": ["id", "uid", "latitude", "longitude", "name", "createdAt", "type"]
+    }
+  },
+  "firestore": {
+    "/markers/{markerId}": {
+      "schema": "PlantMarker",
+      "description": "Collection of plant markers in the garden."
+    }
+  }
+}
