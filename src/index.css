@@ -36,21 +36,12 @@
   background: rgba(0, 0, 0, 0.2);
 }
 
-/* Marker Scaling */
+/* Marker Styling */
 .marker-inner {
-  transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1), width 0.3s ease, height 0.3s ease, border-width 0.3s ease;
-}
-
-.zoom-low .marker-inner {
-  width: 1rem; /* w-4 */
-  height: 1rem; /* h-4 */
-  border-width: 1px;
-}
-
-.zoom-high .marker-inner {
   width: 2.5rem; /* w-10 */
   height: 2.5rem; /* h-10 */
   border-width: 2px;
+  transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 .marker-inner:hover {

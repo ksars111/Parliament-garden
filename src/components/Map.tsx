@@ -5,19 +5,6 @@ import { Leaf, Plus, Map as MapIcon, Info, List, Search, X, ChevronRight, Pencil
 import { PlantMarker } from '../types';
 import { PlantPopup } from './PlantPopup';
 import { motion, AnimatePresence } from 'motion/react';
-import { 
-  auth, 
-  db, 
-  collection, 
-  doc, 
-  setDoc, 
-  deleteDoc, 
-  onSnapshot, 
-  query, 
-  OperationType,
-  handleFirestoreError,
-  signInAnonymously
-} from '../firebase';
 
 // Parliament of Victoria, Melbourne
 const INITIAL_CENTER: [number, number] = [144.9742, -37.8108];
@@ -51,23 +38,6 @@ const MapComponent: React.FC<MapComponentProps> = ({
   const [isMapLoaded, setIsMapLoaded] = useState(false);
   const [zoomLevel, setZoomLevel] = useState(INITIAL_ZOOM);
   const markersLayerRef = useRef<Record<string, maplibregl.Marker>>({});
-  const previousViewRef = useRef<{ center: maplibregl.LngLat; zoom: number; pitch: number; bearing: number } | null>(null);
-
-  // Handle returning to previous view when popup closes
-  useEffect(() => {
-    if (!selectedMarker && previousViewRef.current && mapRef.current) {
-      const view = previousViewRef.current;
-      mapRef.current.flyTo({
-        center: view.center,
-        zoom: view.zoom,
-        pitch: view.pitch,
-        bearing: view.bearing,
-        speed: 1.2,
-        curve: 1.42
-      });
-      previousViewRef.current = null;
-    }
-  }, [selectedMarker, mapRef]);
 
   // Initialize Map
   useEffect(() => {
@@ -80,7 +50,9 @@ const MapComponent: React.FC<MapComponentProps> = ({
         sources: {
           'google-satellite': {
             type: 'raster',
-            tiles: ['https://mt1.google.com/vt/lyrs=s&x={x}&y={y}&z={z}'],
+            tiles: [
+              '/api/tiles/{z}/{y}/{x}'
+            ],
             tileSize: 256,
             attribution: '© Google'
           }
@@ -157,10 +129,17 @@ const MapComponent: React.FC<MapComponentProps> = ({
         // Note: MapLibre handles dragging internally if enabled
         existingMarker.setLngLat([marker.longitude, marker.latitude]);
         existingMarker.setDraggable(canEdit);
+        
+        // Update z-index for depth sorting (lower latitude = closer to camera = higher z-index)
+        const el = existingMarker.getElement();
+        el.style.zIndex = Math.round((90 - marker.latitude) * 10000).toString();
       } else {
         // Create custom marker element
         const el = document.createElement('div');
         el.className = 'cursor-pointer'; // Base container for MapLibre positioning
+        
+        // Set initial z-index for depth sorting
+        el.style.zIndex = Math.round((90 - marker.latitude) * 10000).toString();
         
         // Inner wrapper for visual style and hover effects
         const inner = document.createElement('div');
@@ -188,35 +167,16 @@ const MapComponent: React.FC<MapComponentProps> = ({
         // Click handler
         el.addEventListener('click', (e) => {
           e.stopPropagation();
-          
-          if (!mapRef.current) return;
-          const map = mapRef.current;
-
-          // Save current view before flying
-          previousViewRef.current = {
-            center: map.getCenter(),
-            zoom: map.getZoom(),
-            pitch: map.getPitch(),
-            bearing: map.getBearing()
-          };
-          
-          // Fly to marker
-          map.flyTo({
-            center: [marker.longitude, marker.latitude],
-            zoom: 20,
-            speed: 1.2,
-            curve: 1.42
-          });
-
-          // Only show popup after animation finishes
-          map.once('moveend', () => {
-            onMarkerClick(marker);
-          });
+          onMarkerClick(marker);
         });
 
         // Drag handlers
         newMarker.on('dragend', () => {
           const lngLat = newMarker.getLngLat();
+          
+          // Update z-index immediately for smooth feedback
+          el.style.zIndex = Math.round((90 - lngLat.lat) * 10000).toString();
+          
           onUpdatePosition({
             ...marker,
             longitude: lngLat.lng,
@@ -240,7 +200,7 @@ const MapComponent: React.FC<MapComponentProps> = ({
 
   return (
     <div className="relative w-full h-full">
-      <div ref={containerRef} className={`w-full h-full bg-gray-900 ${zoomLevel >= 19 ? 'zoom-high' : 'zoom-low'}`} />
+      <div ref={containerRef} className="w-full h-full bg-gray-900" />
       
       <AnimatePresence>
         {!isMapLoaded && (
@@ -248,7 +208,8 @@ const MapComponent: React.FC<MapComponentProps> = ({
             initial={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             transition={{ duration: 1, ease: "easeInOut" }}
-            className="absolute inset-0 z-50 flex flex-col items-center justify-center bg-gray-900"
+            className="absolute inset-0 flex flex-col items-center justify-center bg-gray-900"
+            style={{ zIndex: 4000000 }}
           >
             <div className="flex flex-col items-center gap-6">
               <div className="relative">
@@ -271,7 +232,10 @@ const MapComponent: React.FC<MapComponentProps> = ({
       </AnimatePresence>
 
       {/* Zoom Level Indicator */}
-      <div className="absolute bottom-6 left-6 z-10 flex flex-col gap-2 pointer-events-none">
+      <div 
+        className="absolute bottom-6 left-6 flex flex-col gap-2 pointer-events-none"
+        style={{ zIndex: 3000000 }}
+      >
         <div className="bg-black/40 backdrop-blur-md border border-white/10 px-3 py-1.5 rounded-full flex items-center gap-2 shadow-lg">
           <div className="w-1.5 h-1.5 bg-emerald-500 rounded-full animate-pulse" />
           <span className="text-[10px] font-mono font-medium text-white/80 uppercase tracking-widest">
@@ -295,30 +259,22 @@ export const GardenMap: React.FC = () => {
   const [activeType, setActiveType] = useState<'tree' | 'plant'>('plant');
   const mapRef = useRef<maplibregl.Map | null>(null);
 
-  // Handle Anonymous Auth
-  useEffect(() => {
-    signInAnonymously(auth).catch(err => {
-      if (err.code === 'auth/admin-restricted-operation') {
-        const msg = "Anonymous Authentication is disabled in your Firebase project. Please enable it in the Firebase Console.";
-        setAuthError(msg);
-      } else {
-        setAuthError(err.message);
+  // Fetch markers on load
+  const fetchMarkers = useCallback(async () => {
+    try {
+      const response = await fetch('/api/markers');
+      if (response.ok) {
+        const data = await response.json();
+        setMarkers(data);
       }
-    });
+    } catch (error) {
+      console.error('Failed to fetch markers:', error);
+    }
   }, []);
 
-  // Sync with Firestore
   useEffect(() => {
-    const q = query(collection(db, 'markers'));
-    const unsubscribe = onSnapshot(q, (snapshot) => {
-      const newMarkers = snapshot.docs.map(doc => doc.data() as PlantMarker);
-      setMarkers(newMarkers);
-    }, (error) => {
-      handleFirestoreError(error, OperationType.LIST, 'markers');
-    });
-
-    return () => unsubscribe();
-  }, []);
+    fetchMarkers();
+  }, [fetchMarkers]);
 
   const handleUnlockEditing = () => {
     setIsUnlocked(true);
@@ -338,7 +294,7 @@ export const GardenMap: React.FC = () => {
 
     const newMarker: PlantMarker = {
       id: Math.random().toString(36).substr(2, 9),
-      uid: auth.currentUser?.uid || 'anonymous',
+      uid: 'local-user',
       latitude: lngLat.lat,
       longitude: lngLat.lng,
       name: activeType === 'tree' ? 'New Tree' : 'New Plant',
@@ -349,13 +305,21 @@ export const GardenMap: React.FC = () => {
     };
 
     try {
-      await setDoc(doc(db, 'markers', newMarker.id), newMarker);
-      return newMarker;
+      const response = await fetch('/api/markers', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(newMarker)
+      });
+      if (response.ok) {
+        fetchMarkers();
+        return newMarker;
+      }
+      return null;
     } catch (e) {
-      handleFirestoreError(e, OperationType.WRITE, `markers/${newMarker.id}`);
+      console.error('Failed to save marker:', e);
       return null;
     }
-  }, [canEdit, activeType]);
+  }, [canEdit, activeType, fetchMarkers]);
 
   const addMarkerAtCenter = async () => {
     if (!mapRef.current || !canEdit) return;
@@ -373,29 +337,48 @@ export const GardenMap: React.FC = () => {
   const updateMarker = async (updated: PlantMarker) => {
     if (!canEdit) return;
     try {
-      await setDoc(doc(db, 'markers', updated.id), updated, { merge: true });
-      setSelectedMarker(updated);
+      const response = await fetch('/api/markers', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(updated)
+      });
+      if (response.ok) {
+        setSelectedMarker(updated);
+        fetchMarkers();
+      }
     } catch (e) {
-      handleFirestoreError(e, OperationType.WRITE, `markers/${updated.id}`);
+      console.error('Failed to update marker:', e);
     }
   };
 
   const updatePosition = async (updated: PlantMarker) => {
     if (!canEdit) return;
     try {
-      await setDoc(doc(db, 'markers', updated.id), updated, { merge: true });
+      const response = await fetch('/api/markers', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(updated)
+      });
+      if (response.ok) {
+        fetchMarkers();
+      }
     } catch (e) {
-      handleFirestoreError(e, OperationType.WRITE, `markers/${updated.id}`);
+      console.error('Failed to update position:', e);
     }
   };
 
   const deleteMarker = async (id: string) => {
     if (!canEdit) return;
     try {
-      await deleteDoc(doc(db, 'markers', id));
-      setSelectedMarker(null);
+      const response = await fetch(`/api/markers/${id}`, {
+        method: 'DELETE'
+      });
+      if (response.ok) {
+        setSelectedMarker(null);
+        fetchMarkers();
+      }
     } catch (e) {
-      handleFirestoreError(e, OperationType.DELETE, `markers/${id}`);
+      console.error('Failed to delete marker:', e);
     }
   };
 
@@ -418,7 +401,10 @@ export const GardenMap: React.FC = () => {
       {/* Welcome Popup */}
       <AnimatePresence>
         {showWelcome && (
-          <div className="absolute inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-md">
+          <div 
+            className="absolute inset-0 flex items-center justify-center p-4 bg-black/60 backdrop-blur-md"
+            style={{ zIndex: 3000000 }}
+          >
             <motion.div
               initial={{ opacity: 0, scale: 0.9, y: 20 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}
@@ -473,7 +459,10 @@ export const GardenMap: React.FC = () => {
       </AnimatePresence>
 
       {/* Controls */}
-      <div className="absolute top-0 left-0 z-10 flex flex-col gap-4 p-4">
+      <div 
+        className="absolute top-0 left-0 flex flex-col gap-4 p-4"
+        style={{ zIndex: 3000000 }}
+      >
         {authError && (
           <div className="p-2 bg-red-500/20 backdrop-blur-md border border-red-500/30 rounded-lg text-red-200 text-[10px] max-w-[150px] flex items-start gap-2">
             <AlertCircle size={14} className="shrink-0 mt-0.5" />
@@ -527,7 +516,10 @@ export const GardenMap: React.FC = () => {
       {/* Unlock Confirmation Popup */}
       <AnimatePresence>
         {showUnlockConfirm && (
-          <div className="absolute inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm">
+          <div 
+            className="absolute inset-0 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm"
+            style={{ zIndex: 3000000 }}
+          >
             <motion.div 
               initial={{ opacity: 0, scale: 0.9, y: 20 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}
@@ -563,7 +555,10 @@ export const GardenMap: React.FC = () => {
       {/* Popup Overlay */}
       <AnimatePresence>
         {selectedMarker && (
-          <div className="absolute inset-y-0 right-0 z-40 pointer-events-none flex items-center justify-end p-6 md:p-12">
+          <div 
+            className="absolute inset-y-0 right-0 pointer-events-none flex items-center justify-end p-6 md:p-12"
+            style={{ zIndex: 3000000 }}
+          >
             <div className="pointer-events-auto">
               <PlantPopup
                 marker={selectedMarker}
