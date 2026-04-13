@@ -16,7 +16,7 @@ export const PlantPopup: React.FC<PlantPopupProps> = ({ marker, onSave, onDelete
   const [description, setDescription] = useState(marker.description || '');
   const [imageUrl, setImageUrl] = useState(marker.imageUrl || '');
   const [type, setType] = useState(marker.type || 'tree');
-  const [isEditing, setIsEditing] = useState(false);
+  const [isEditing, setIsEditing] = useState(canEdit);
   const [isExpanded, setIsExpanded] = useState(false);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
@@ -181,7 +181,7 @@ export const PlantPopup: React.FC<PlantPopupProps> = ({ marker, onSave, onDelete
               <div className="flex gap-2 pt-2">
                 <button
                   onClick={() => setIsEditing(false)}
-                  className="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white py-2 rounded-lg text-sm font-medium flex items-center justify-center gap-2 transition-colors"
+                  className="flex-[3] bg-emerald-600 hover:bg-emerald-700 text-white py-2 rounded-lg text-sm font-medium flex items-center justify-center gap-2 transition-colors"
                 >
                   {isSaving ? (
                     <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
@@ -189,6 +189,13 @@ export const PlantPopup: React.FC<PlantPopupProps> = ({ marker, onSave, onDelete
                     <Check size={16} />
                   )}
                   Done Editing
+                </button>
+                <button
+                  onClick={() => onDelete(marker.id)}
+                  className="flex-1 bg-red-50 hover:bg-red-100 text-red-600 py-2 rounded-lg flex items-center justify-center transition-colors"
+                  title="Delete marker"
+                >
+                  <Trash2 size={18} />
                 </button>
               </div>
             </div>
