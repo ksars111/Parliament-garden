@@ -153,14 +153,6 @@ const MapComponent: React.FC<MapComponentProps> = ({
         el.addEventListener('click', (e) => {
           e.stopPropagation();
           onMarkerClick(marker);
-          
-          // Fly to marker
-          map.flyTo({
-            center: [marker.longitude, marker.latitude],
-            zoom: 20,
-            speed: 1.2,
-            curve: 1.42
-          });
         });
 
         // Drag handlers
@@ -178,14 +170,7 @@ const MapComponent: React.FC<MapComponentProps> = ({
     });
   }, [isMapLoaded, markers, canEdit, onMarkerClick, onUpdatePosition]);
 
-  // Zoom to markers on initial load
-  useEffect(() => {
-    if (isMapLoaded && mapRef.current && markers.length > 0) {
-      const bounds = new maplibregl.LngLatBounds();
-      markers.forEach(m => bounds.extend([m.longitude, m.latitude]));
-      mapRef.current.fitBounds(bounds, { padding: 100, maxZoom: 17 });
-    }
-  }, [isMapLoaded]);
+  // Zoom to markers on initial load removed
 
   return (
     <div className="relative w-full h-full">
