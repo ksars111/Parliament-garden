@@ -165,6 +165,14 @@ const MapComponent: React.FC<MapComponentProps> = ({
         el.addEventListener('click', (e) => {
           e.stopPropagation();
           onMarkerClick(marker);
+          
+          // Fly to marker
+          map.flyTo({
+            center: [marker.longitude, marker.latitude],
+            zoom: 20,
+            speed: 1.2,
+            curve: 1.42
+          });
         });
 
         // Drag handlers
@@ -266,20 +274,12 @@ export const GardenMap: React.FC = () => {
     const unsubscribe = onSnapshot(q, (snapshot) => {
       const newMarkers = snapshot.docs.map(doc => doc.data() as PlantMarker);
       setMarkers(newMarkers);
-      
-      // Sync selected marker if it exists
-      if (selectedMarker) {
-        const updatedSelected = newMarkers.find(m => m.id === selectedMarker.id);
-        if (updatedSelected) {
-          setSelectedMarker(updatedSelected);
-        }
-      }
     }, (error) => {
       handleFirestoreError(error, OperationType.LIST, 'markers');
     });
 
     return () => unsubscribe();
-  }, [selectedMarker?.id]);
+  }, []);
 
   const handleUnlockEditing = () => {
     setIsUnlocked(true);
@@ -295,11 +295,11 @@ export const GardenMap: React.FC = () => {
   const canEdit = isUnlocked;
 
   const onMapClick = useCallback(async (lngLat: { lat: number; lng: number }) => {
-    if (!canEdit || !auth.currentUser) return null;
+    if (!canEdit) return null;
 
     const newMarker: PlantMarker = {
       id: Math.random().toString(36).substr(2, 9),
-      uid: auth.currentUser.uid,
+      uid: auth.currentUser?.uid || 'anonymous',
       latitude: lngLat.lat,
       longitude: lngLat.lng,
       name: activeType === 'tree' ? 'New Tree' : 'New Plant',
@@ -319,7 +319,7 @@ export const GardenMap: React.FC = () => {
   }, [canEdit, activeType]);
 
   const addMarkerAtCenter = async () => {
-    if (!mapRef.current || !canEdit || !auth.currentUser) return;
+    if (!mapRef.current || !canEdit) return;
     const center = mapRef.current.getCenter();
     const marker = await onMapClick({
       lat: center.lat,
@@ -332,7 +332,7 @@ export const GardenMap: React.FC = () => {
   };
 
   const updateMarker = async (updated: PlantMarker) => {
-    if (!canEdit || !auth.currentUser) return;
+    if (!canEdit) return;
     try {
       await setDoc(doc(db, 'markers', updated.id), updated, { merge: true });
       setSelectedMarker(updated);
@@ -342,7 +342,7 @@ export const GardenMap: React.FC = () => {
   };
 
   const updatePosition = async (updated: PlantMarker) => {
-    if (!canEdit || !auth.currentUser) return;
+    if (!canEdit) return;
     try {
       await setDoc(doc(db, 'markers', updated.id), updated, { merge: true });
     } catch (e) {
@@ -351,8 +351,7 @@ export const GardenMap: React.FC = () => {
   };
 
   const deleteMarker = async (id: string) => {
-    if (!canEdit || !auth.currentUser) return;
-    
+    if (!canEdit) return;
     try {
       await deleteDoc(doc(db, 'markers', id));
       setSelectedMarker(null);
@@ -526,12 +525,11 @@ export const GardenMap: React.FC = () => {
       </AnimatePresence>
 
       {/* Popup Overlay */}
-      <AnimatePresence mode="wait">
+      <AnimatePresence>
         {selectedMarker && (
           <div className="absolute inset-y-0 right-0 z-40 pointer-events-none flex items-center justify-end p-6 md:p-12">
             <div className="pointer-events-auto">
               <PlantPopup
-                key={selectedMarker.id}
                 marker={selectedMarker}
                 onSave={updateMarker}
                 onDelete={deleteMarker}
