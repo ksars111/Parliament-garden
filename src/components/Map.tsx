@@ -5,61 +5,7 @@ import { Leaf, Plus, Map as MapIcon, Info, List, Search, X, ChevronRight, Pencil
 import { PlantMarker } from '../types';
 import { PlantPopup } from './PlantPopup';
 import { motion, AnimatePresence } from 'motion/react';
-import { 
-  auth, 
-  db, 
-  collection, 
-  doc, 
-  setDoc, 
-  deleteDoc, 
-  onSnapshot, 
-  query, 
-  OperationType,
-  handleFirestoreError,
-  signInAnonymously,
-  getDocFromServer
-} from '../firebase';
-
-// Error Boundary Component
-class ErrorBoundary extends React.Component<{ children: React.ReactNode }, { hasError: boolean; error: any }> {
-  constructor(props: any) {
-    super(props);
-    this.state = { hasError: false, error: null };
-  }
-
-  static getDerivedStateFromError(error: any) {
-    return { hasError: true, error };
-  }
-
-  render() {
-    if (this.state.hasError) {
-      let message = "Something went wrong.";
-      try {
-        const errObj = JSON.parse(this.state.error.message);
-        if (errObj.error.includes('offline')) {
-          message = "Database is currently offline or unavailable. Please check your connection.";
-        }
-      } catch (e) {
-        // Not a JSON error
-      }
-      
-      return (
-        <div className="flex flex-col items-center justify-center h-screen bg-gray-900 text-white p-6 text-center">
-          <AlertCircle size={48} className="text-red-500 mb-4" />
-          <h2 className="text-xl font-bold mb-2">Application Error</h2>
-          <p className="text-gray-400 max-w-md mb-6">{message}</p>
-          <button 
-            onClick={() => window.location.reload()}
-            className="px-6 py-2 bg-emerald-500 rounded-lg font-medium"
-          >
-            Retry
-          </button>
-        </div>
-      );
-    }
-    return this.props.children;
-  }
-}
+import { ErrorBoundary } from './ErrorBoundary';
 
 // Parliament of Victoria, Melbourne
 const INITIAL_CENTER: [number, number] = [144.9742, -37.8108];
@@ -295,49 +241,19 @@ export const GardenMap: React.FC = () => {
 };
 
 const GardenMapContent: React.FC = () => {
-  const [markers, setMarkers] = useState<PlantMarker[]>([]);
-  const [isUnlocked, setIsUnlocked] = useState(true); // Default to unlocked for live editing
+  const [markers, setMarkers] = useState<PlantMarker[]>(() => {
+    const saved = localStorage.getItem('garden_markers');
+    return saved ? JSON.parse(saved) : [];
+  });
+  const [isUnlocked, setIsUnlocked] = useState(true);
   const [selectedMarker, setSelectedMarker] = useState<PlantMarker | null>(null);
   const [showWelcome, setShowWelcome] = useState(false);
   const mapRef = useRef<maplibregl.Map | null>(null);
 
-  // Handle Anonymous Auth and Connection Test
+  // Persist markers to localStorage
   useEffect(() => {
-    const init = async () => {
-      try {
-        await signInAnonymously(auth);
-        // Test connection
-        await getDocFromServer(doc(db, 'test', 'connection'));
-      } catch (err: any) {
-        console.warn("Auth or Connection test failed:", err.message);
-        if (err.message.includes('offline')) {
-          // This will be caught by ErrorBoundary if we throw, 
-          // but for now we'll just log and let onSnapshot handle it
-        }
-      }
-    };
-    init();
-  }, []);
-
-  // Sync with Firestore
-  useEffect(() => {
-    const q = query(collection(db, 'markers'));
-    const unsubscribe = onSnapshot(q, (snapshot) => {
-      const newMarkers = snapshot.docs.map(doc => doc.data() as PlantMarker);
-      setMarkers(newMarkers);
-      
-      // Update selected marker if it's the one that was updated
-      setSelectedMarker(prev => {
-        if (!prev) return null;
-        const updated = newMarkers.find(m => m.id === prev.id);
-        return updated || null;
-      });
-    }, (error) => {
-      handleFirestoreError(error, OperationType.LIST, 'markers');
-    });
-
-    return () => unsubscribe();
-  }, []);
+    localStorage.setItem('garden_markers', JSON.stringify(markers));
+  }, [markers]);
 
   const handleUnlockEditing = () => {
     setIsUnlocked(true);
@@ -354,7 +270,7 @@ const GardenMapContent: React.FC = () => {
 
     const newMarker: PlantMarker = {
       id: Math.random().toString(36).substr(2, 9),
-      uid: auth.currentUser?.uid || 'anonymous',
+      uid: 'local-user',
       latitude: lngLat.lat,
       longitude: lngLat.lng,
       name: 'New Tree',
@@ -364,13 +280,8 @@ const GardenMapContent: React.FC = () => {
       type: 'tree'
     };
 
-    try {
-      await setDoc(doc(db, 'markers', newMarker.id), newMarker);
-      return newMarker;
-    } catch (e) {
-      handleFirestoreError(e, OperationType.WRITE, `markers/${newMarker.id}`);
-      return null;
-    }
+    setMarkers(prev => [...prev, newMarker]);
+    return newMarker;
   }, [canEdit]);
 
   const addMarkerAtCenter = async () => {
@@ -387,31 +298,16 @@ const GardenMapContent: React.FC = () => {
   };
 
   const updateMarker = async (updated: PlantMarker) => {
-    if (!canEdit) return;
-    try {
-      await setDoc(doc(db, 'markers', updated.id), updated, { merge: true });
-    } catch (e) {
-      handleFirestoreError(e, OperationType.WRITE, `markers/${updated.id}`);
-    }
+    setMarkers(prev => prev.map(m => m.id === updated.id ? updated : m));
   };
 
   const updatePosition = async (updated: PlantMarker) => {
-    if (!canEdit) return;
-    try {
-      await setDoc(doc(db, 'markers', updated.id), updated, { merge: true });
-    } catch (e) {
-      handleFirestoreError(e, OperationType.WRITE, `markers/${updated.id}`);
-    }
+    setMarkers(prev => prev.map(m => m.id === updated.id ? updated : m));
   };
 
   const deleteMarker = async (id: string) => {
-    if (!canEdit) return;
-    try {
-      await deleteDoc(doc(db, 'markers', id));
-      setSelectedMarker(null);
-    } catch (e) {
-      handleFirestoreError(e, OperationType.DELETE, `markers/${id}`);
-    }
+    setMarkers(prev => prev.filter(m => m.id !== id));
+    setSelectedMarker(null);
   };
 
   return (

@@ -60,9 +60,9 @@ export const PlantPopup: React.FC<PlantPopupProps> = ({ marker, onSave, onDelete
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
-      // Basic size check (e.g., 2MB) to prevent localStorage overflow
-      if (file.size > 2 * 1024 * 1024) {
-        alert("Image is too large. Please select an image under 2MB.");
+      // Basic size check (1MB) to prevent Firestore document size overflow
+      if (file.size > 1 * 1024 * 1024) {
+        alert("Image is too large. Please select an image under 1MB.");
         return;
       }
 

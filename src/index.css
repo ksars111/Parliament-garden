@@ -15,10 +15,6 @@
 .animate-dot-2 { animation: dot-pulse 1.5s infinite 0.3s; }
 .animate-dot-3 { animation: dot-pulse 1.5s infinite 0.6s; }
 
-.cesium-viewer-bottom {
-  display: none !important;
-}
-
 .custom-scrollbar::-webkit-scrollbar {
   width: 4px;
 }
