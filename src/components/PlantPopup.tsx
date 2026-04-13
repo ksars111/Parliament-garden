@@ -19,7 +19,16 @@ export const PlantPopup: React.FC<PlantPopupProps> = ({ marker, onSave, onDelete
   const [isEditing, setIsEditing] = useState(false);
   const [isExpanded, setIsExpanded] = useState(false);
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Sync state when marker changes (e.g. background update)
+  React.useEffect(() => {
+    setName(marker.name);
+    setDescription(marker.description);
+    setImageUrl(marker.imageUrl);
+    setType(marker.type);
+  }, [marker]);
 
   const TRUNCATE_LIMIT = 150;
   const shouldTruncate = description.length > TRUNCATE_LIMIT;
@@ -35,9 +44,10 @@ export const PlantPopup: React.FC<PlantPopupProps> = ({ marker, onSave, onDelete
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
-      // Basic size check (e.g., 2MB) to prevent localStorage overflow
-      if (file.size > 2 * 1024 * 1024) {
-        alert("Image is too large. Please select an image under 2MB.");
+      // Basic size check (e.g., 800KB) to stay under Firestore 1MB limit
+      if (file.size > 0.8 * 1024 * 1024) {
+        setError("Image is too large. Please select an image under 800KB.");
+        setTimeout(() => setError(null), 3000);
         return;
       }
 
@@ -85,6 +95,12 @@ export const PlantPopup: React.FC<PlantPopupProps> = ({ marker, onSave, onDelete
           >
             <X size={18} />
           </button>
+
+          {error && (
+            <div className="absolute inset-x-0 top-0 p-2 bg-red-500 text-white text-[10px] font-bold text-center animate-in fade-in slide-in-from-top-2">
+              {error}
+            </div>
+          )}
         </div>
 
         <div className="p-5 space-y-4">
