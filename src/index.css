@@ -35,20 +35,3 @@
 .custom-scrollbar::-webkit-scrollbar-thumb:hover {
   background: rgba(0, 0, 0, 0.2);
 }
-
-/* Marker Styling */
-.marker-inner {
-  width: 2.5rem; /* w-10 */
-  height: 2.5rem; /* h-10 */
-  border-width: 2px;
-  transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-}
-
-.marker-inner:hover {
-  transform: scale(1.2);
-  z-index: 50;
-}
-
-.marker-inner:active {
-  transform: scale(0.95);
-}
