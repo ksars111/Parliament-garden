@@ -1,5 +1,5 @@
-import React, { useState, useRef, useEffect } from 'react';
-import { X, Save, Trash2, Camera, Upload, Maximize2, Check } from 'lucide-react';
+import React, { useState, useRef } from 'react';
+import { X, Save, Trash2, Camera, Upload, Maximize2 } from 'lucide-react';
 import { PlantMarker } from '../types';
 import { motion, AnimatePresence } from 'motion/react';
 
@@ -12,36 +12,22 @@ interface PlantPopupProps {
 }
 
 export const PlantPopup: React.FC<PlantPopupProps> = ({ marker, onSave, onDelete, onClose, canEdit = false }) => {
-  const [name, setName] = useState(marker.name || '');
-  const [description, setDescription] = useState(marker.description || '');
-  const [imageUrl, setImageUrl] = useState(marker.imageUrl || '');
-  const [type, setType] = useState(marker.type || 'tree');
-  const [isEditing, setIsEditing] = useState(canEdit);
+  const [name, setName] = useState(marker.name);
+  const [description, setDescription] = useState(marker.description);
+  const [imageUrl, setImageUrl] = useState(marker.imageUrl);
+  const [type, setType] = useState(marker.type);
   const [isExpanded, setIsExpanded] = useState(false);
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [isSaving, setIsSaving] = useState(false);
-  const [isUploading, setIsUploading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
-  const handleSave = () => {
-    setIsSaving(true);
-    onSave({ ...marker, name, description, imageUrl, type });
-    setTimeout(() => {
-      setIsSaving(false);
-      setIsEditing(false);
-    }, 500);
-  };
-
-  // Sync state when marker changes from external source
-  useEffect(() => {
-    if (!isEditing) {
-      setName(marker.name || '');
-      setDescription(marker.description || '');
-      setImageUrl(marker.imageUrl || '');
-      setType(marker.type || 'tree');
-    }
-  }, [marker, isEditing]);
+  // Sync state when marker changes (e.g. background update)
+  React.useEffect(() => {
+    setName(marker.name);
+    setDescription(marker.description);
+    setImageUrl(marker.imageUrl);
+    setType(marker.type);
+  }, [marker]);
 
   const TRUNCATE_LIMIT = 150;
   const shouldTruncate = description.length > TRUNCATE_LIMIT;
@@ -49,71 +35,25 @@ export const PlantPopup: React.FC<PlantPopupProps> = ({ marker, onSave, onDelete
     ? `${description.slice(0, TRUNCATE_LIMIT)}...` 
     : description;
 
-  const resizeImage = (file: File, maxWidth: number, maxHeight: number): Promise<Blob> => {
-    return new Promise((resolve, reject) => {
-      const reader = new FileReader();
-      reader.readAsDataURL(file);
-      reader.onload = (event) => {
-        const img = new Image();
-        img.src = event.target?.result as string;
-        img.onload = () => {
-          const canvas = document.createElement('canvas');
-          let width = img.width;
-          let height = img.height;
-
-          if (width > height) {
-            if (width > maxWidth) {
-              height *= maxWidth / width;
-              width = maxWidth;
-            }
-          } else {
-            if (height > maxHeight) {
-              width *= maxHeight / height;
-              height = maxHeight;
-            }
-          }
-
-          canvas.width = width;
-          canvas.height = height;
-          const ctx = canvas.getContext('2d');
-          ctx?.drawImage(img, 0, 0, width, height);
-
-          canvas.toBlob((blob) => {
-            if (blob) resolve(blob);
-            else reject(new Error('Canvas to Blob failed'));
-          }, 'image/jpeg', 0.85);
-        };
-      };
-      reader.onerror = (error) => reject(error);
-    });
+  const handleSave = () => {
+    onSave({ ...marker, name, description, imageUrl, type });
   };
 
-  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (!file) return;
-
-    setIsUploading(true);
-    try {
-      const resizedBlob = await resizeImage(file, 1200, 1200);
-      const formData = new FormData();
-      formData.append('image', resizedBlob, file.name.replace(/\.[^/.]+$/, "") + ".jpg");
-
-      const response = await fetch('/api/upload', {
-        method: 'POST',
-        body: formData,
-      });
-      
-      if (!response.ok) throw new Error('Upload failed');
-      
-      const data = await response.json();
-      if (data.imageUrl) {
-        setImageUrl(data.imageUrl);
+    if (file) {
+      // Basic size check (e.g., 800KB) to stay under Firestore 1MB limit
+      if (file.size > 0.8 * 1024 * 1024) {
+        setError("Image is too large. Please select an image under 800KB.");
+        setTimeout(() => setError(null), 3000);
+        return;
       }
-    } catch (error) {
-      console.error('Upload failed:', error);
-      alert("Failed to upload image. Please try again.");
-    } finally {
-      setIsUploading(false);
+
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setImageUrl(reader.result as string);
+      };
+      reader.readAsDataURL(file);
     }
   };
 
@@ -153,10 +93,16 @@ export const PlantPopup: React.FC<PlantPopupProps> = ({ marker, onSave, onDelete
           >
             <X size={18} />
           </button>
+
+          {error && (
+            <div className="absolute inset-x-0 top-0 p-2 bg-red-500 text-white text-[10px] font-bold text-center animate-in fade-in slide-in-from-top-2">
+              {error}
+            </div>
+          )}
         </div>
 
         <div className="p-5 space-y-4">
-          {isEditing ? (
+          {canEdit ? (
             <div className="space-y-3">
               <div>
                 <label className="text-[10px] font-bold uppercase tracking-wider text-gray-400 mb-1 block">Type</label>
@@ -207,15 +153,10 @@ export const PlantPopup: React.FC<PlantPopupProps> = ({ marker, onSave, onDelete
                   />
                   <button
                     onClick={() => fileInputRef.current?.click()}
-                    disabled={isUploading}
-                    className={`p-2 ${isUploading ? 'bg-gray-50 text-gray-300' : 'bg-gray-100 hover:bg-gray-200 text-gray-600'} rounded-lg transition-colors flex items-center justify-center`}
+                    className="p-2 bg-gray-100 hover:bg-gray-200 text-gray-600 rounded-lg transition-colors"
                     title="Upload image"
                   >
-                    {isUploading ? (
-                      <div className="w-4 h-4 border-2 border-gray-300 border-t-emerald-500 rounded-full animate-spin" />
-                    ) : (
-                      <Upload size={18} />
-                    )}
+                    <Upload size={18} />
                   </button>
                   <input
                     ref={fileInputRef}
@@ -229,21 +170,16 @@ export const PlantPopup: React.FC<PlantPopupProps> = ({ marker, onSave, onDelete
               <div className="flex gap-2 pt-2">
                 <button
                   onClick={handleSave}
-                  className="flex-[3] bg-emerald-600 hover:bg-emerald-700 text-white py-2 rounded-lg text-sm font-medium flex items-center justify-center gap-2 transition-colors"
+                  className="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white py-2 rounded-lg text-sm font-medium flex items-center justify-center gap-2 transition-colors"
                 >
-                  {isSaving ? (
-                    <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                  ) : (
-                    <Save size={16} />
-                  )}
+                  <Save size={16} />
                   Save Changes
                 </button>
                 <button
-                  onClick={() => onDelete(marker.id)}
-                  className="flex-1 bg-red-50 hover:bg-red-100 text-red-600 py-2 rounded-lg flex items-center justify-center transition-colors"
-                  title="Delete marker"
+                  onClick={onClose}
+                  className="px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-600 rounded-lg text-sm font-medium transition-colors"
                 >
-                  <Trash2 size={18} />
+                  Cancel
                 </button>
               </div>
             </div>
@@ -268,24 +204,14 @@ export const PlantPopup: React.FC<PlantPopupProps> = ({ marker, onSave, onDelete
                     </button>
                   )}
                 </div>
-                <div className="flex items-center justify-between pt-2 border-t border-gray-100">
-                {canEdit ? (
-                  <>
-                    <button
-                      onClick={() => setIsEditing(true)}
-                      className="text-sm font-medium text-emerald-600 hover:text-emerald-700 transition-colors"
-                    >
-                      Edit Details
-                    </button>
-                    <button
-                      onClick={() => onDelete(marker.id)}
-                      className="p-2 text-gray-400 hover:text-red-500 transition-colors"
-                      title="Delete marker"
-                    >
-                      <Trash2 size={18} />
-                    </button>
-                  </>
-                ) : null}
+                <div className="flex items-center justify-end pt-2 border-t border-gray-100">
+                  <button
+                    onClick={() => onDelete(marker.id)}
+                    className="p-2 text-gray-400 hover:text-red-500 transition-colors"
+                    title="Delete marker"
+                  >
+                    <Trash2 size={18} />
+                  </button>
               </div>
             </div>
           )}

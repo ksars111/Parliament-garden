@@ -36,8 +36,6 @@ export class ErrorBoundary extends React.Component<Props, State> {
         if (parsed.error) {
           errorMessage = "Database Connection Issue";
           details = parsed.error;
-        } else {
-          errorMessage = this.state.error?.message || errorMessage;
         }
       } catch (e) {
         errorMessage = this.state.error?.message || errorMessage;
