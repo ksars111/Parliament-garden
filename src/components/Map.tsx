@@ -42,6 +42,18 @@ const MapComponent: React.FC<MapComponentProps> = ({
   const [zoomLevel, setZoomLevel] = useState(INITIAL_ZOOM);
   const markersLayerRef = useRef<Record<string, maplibregl.Marker>>({});
 
+  // Handle Resize
+  useEffect(() => {
+    if (!containerRef.current || !mapRef.current) return;
+
+    const resizeObserver = new ResizeObserver(() => {
+      mapRef.current?.resize();
+    });
+
+    resizeObserver.observe(containerRef.current);
+    return () => resizeObserver.disconnect();
+  }, [isMapLoaded]);
+
   // Initialize Map
   useEffect(() => {
     if (!containerRef.current || mapRef.current) return;
@@ -83,12 +95,13 @@ const MapComponent: React.FC<MapComponentProps> = ({
     map.on('load', () => {
       setIsMapLoaded(true);
       setZoomLevel(map.getZoom());
+      map.resize(); // Initial resize
       if (onAnimationComplete) {
         onAnimationComplete();
       }
     });
 
-    map.on('zoom', () => {
+    map.on('zoomend', () => {
       setZoomLevel(map.getZoom());
     });
 
@@ -262,14 +275,14 @@ const GardenMapContent: React.FC = () => {
     }
   }, [isEditorEnv]);
 
-  const copyData = () => {
+  const copyData = useCallback(() => {
     const data = JSON.stringify(markers, null, 2);
     navigator.clipboard.writeText(data);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
-  };
+  }, [markers]);
 
-  const fetchMarkers = async () => {
+  const fetchMarkers = useCallback(async () => {
     try {
       const response = await fetch('/api/markers');
       if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
@@ -278,9 +291,9 @@ const GardenMapContent: React.FC = () => {
     } catch (error) {
       console.error("Failed to fetch markers from API:", error);
     }
-  };
+  }, []);
 
-  const saveMarkers = async (updatedMarkers: PlantMarker[]) => {
+  const saveMarkers = useCallback(async (updatedMarkers: PlantMarker[]) => {
     if (!isEditorEnv) return;
     setIsSyncing(true);
     try {
@@ -295,12 +308,12 @@ const GardenMapContent: React.FC = () => {
     } finally {
       setTimeout(() => setIsSyncing(false), 500);
     }
-  };
+  }, [isEditorEnv]);
 
   const selectedMarker = markers.find(m => m.id === selectedMarkerId) || null;
   const canEdit = isUnlocked;
 
-  const addMarkerAtCenter = async () => {
+  const addMarkerAtCenter = useCallback(async () => {
     if (!mapRef.current || !canEdit) return;
     const center = mapRef.current.getCenter();
     
@@ -322,18 +335,18 @@ const GardenMapContent: React.FC = () => {
       return updated;
     });
     setSelectedMarkerId(newMarker.id);
-  };
+  }, [canEdit, saveMarkers]);
 
-  const updateMarker = async (updated: PlantMarker) => {
+  const updateMarker = useCallback(async (updated: PlantMarker) => {
     if (!canEdit) return;
     setMarkers(prev => {
       const updatedList = prev.map(m => m.id === updated.id ? updated : m);
       saveMarkers(updatedList);
       return updatedList;
     });
-  };
+  }, [canEdit, saveMarkers]);
 
-  const deleteMarker = async (id: string) => {
+  const deleteMarker = useCallback(async (id: string) => {
     if (!canEdit) return;
     setMarkers(prev => {
       const updatedList = prev.filter(m => m.id !== id);
@@ -341,7 +354,7 @@ const GardenMapContent: React.FC = () => {
       return updatedList;
     });
     setSelectedMarkerId(null);
-  };
+  }, [canEdit, saveMarkers]);
 
   return (
     <div className="relative w-full h-screen bg-gray-900 overflow-hidden">
