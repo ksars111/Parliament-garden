@@ -6,6 +6,7 @@ import { PlantMarker } from '../types';
 import { PlantPopup } from './PlantPopup';
 import { motion, AnimatePresence } from 'motion/react';
 import { ErrorBoundary } from './ErrorBoundary';
+import initialMarkers from '../data/markers.json';
 
 // Parliament of Victoria, Melbourne
 const INITIAL_CENTER: [number, number] = [144.9742, -37.8108];
@@ -220,7 +221,7 @@ export const GardenMap: React.FC = () => {
 };
 
 const GardenMapContent: React.FC = () => {
-  const [markers, setMarkers] = useState<PlantMarker[]>([]);
+  const [markers, setMarkers] = useState<PlantMarker[]>(initialMarkers as PlantMarker[]);
   
   // Detect if we are in the AI Studio editor environment or local dev
   const isEditorEnv = typeof window !== 'undefined' && (
