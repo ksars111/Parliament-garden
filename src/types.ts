@@ -6,6 +6,7 @@ export interface PlantMarker {
   name: string;
   description: string;
   imageUrl: string;
+  storageId?: string;
   createdAt: number;
   type: 'tree' | 'plant';
 }

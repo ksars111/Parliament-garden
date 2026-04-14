@@ -27,7 +27,6 @@ export const PlantPopup: React.FC<PlantPopupProps> = ({ marker, onSave, onDelete
   useEffect(() => {
     if (!isEditing) return;
 
-    // Debounce save
     if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
     
     setIsSaving(true);
@@ -41,7 +40,7 @@ export const PlantPopup: React.FC<PlantPopupProps> = ({ marker, onSave, onDelete
     };
   }, [name, description, imageUrl, type, isEditing]);
 
-  // Sync state when marker changes from external source (live updates)
+  // Sync state when marker changes from external source
   useEffect(() => {
     if (!isEditing) {
       setName(marker.name || '');
@@ -57,21 +56,22 @@ export const PlantPopup: React.FC<PlantPopupProps> = ({ marker, onSave, onDelete
     ? `${description.slice(0, TRUNCATE_LIMIT)}...` 
     : description;
 
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (file) {
-      // Strict 800KB check to stay well within Firestore's 1MB document limit (accounting for base64 overhead)
-      if (file.size > 800 * 1024) {
-        alert("Image is too large. Please select an image under 800KB to ensure it can be saved.");
-        return;
-      }
+    if (!file) return;
 
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        setImageUrl(reader.result as string);
-      };
-      reader.readAsDataURL(file);
+    // For local storage, we'll convert to base64 for now
+    // In a real production app, you'd upload to a server
+    if (file.size > 800 * 1024) {
+      alert("Image is too large. Please select an image under 800KB.");
+      return;
     }
+
+    const reader = new FileReader();
+    reader.onloadend = () => {
+      setImageUrl(reader.result as string);
+    };
+    reader.readAsDataURL(file);
   };
 
   return (

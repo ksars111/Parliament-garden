@@ -1,30 +1,11 @@
 import React, { useState, useCallback, useEffect, useRef } from 'react';
 import maplibregl from 'maplibre-gl';
 import 'maplibre-gl/dist/maplibre-gl.css';
-import { Leaf, Plus, Map as MapIcon, Info, List, Search, X, ChevronRight, Pencil, ShieldCheck, AlertCircle } from 'lucide-react';
+import { Leaf, Plus, Map as MapIcon, X, Pencil, ShieldCheck } from 'lucide-react';
 import { PlantMarker } from '../types';
 import { PlantPopup } from './PlantPopup';
 import { motion, AnimatePresence } from 'motion/react';
-import { 
-  auth, 
-  db, 
-  collection, 
-  doc, 
-  setDoc, 
-  deleteDoc, 
-  onSnapshot, 
-  query, 
-  OperationType,
-  handleFirestoreError,
-  signInAnonymously,
-  signInWithPopup,
-  signOut,
-  googleProvider,
-  onAuthStateChanged,
-  getDocFromServer
-} from '../firebase';
 import { ErrorBoundary } from './ErrorBoundary';
-import { LogIn, LogOut, User } from 'lucide-react';
 
 // Parliament of Victoria, Melbourne
 const INITIAL_CENTER: [number, number] = [144.9742, -37.8108];
@@ -91,7 +72,7 @@ const MapComponent: React.FC<MapComponentProps> = ({
       },
       center: INITIAL_CENTER,
       zoom: INITIAL_ZOOM,
-      pitch: 45, // Slight tilt like Felt
+      pitch: 45,
     });
 
     mapRef.current = map;
@@ -109,7 +90,6 @@ const MapComponent: React.FC<MapComponentProps> = ({
     });
 
     map.on('click', (e) => {
-      // Close popup when clicking the map
       if (!e.defaultPrevented) {
         onClosePopup();
       }
@@ -141,16 +121,12 @@ const MapComponent: React.FC<MapComponentProps> = ({
       const existingMarker = markersLayerRef.current[marker.id];
 
       if (existingMarker) {
-        // Update position if not dragging
-        // Note: MapLibre handles dragging internally if enabled
         existingMarker.setLngLat([marker.longitude, marker.latitude]);
         existingMarker.setDraggable(canEdit);
       } else {
-        // Create custom marker element
         const el = document.createElement('div');
-        el.className = 'cursor-pointer'; // Base container for MapLibre positioning
+        el.className = 'cursor-pointer';
         
-        // Inner wrapper for visual style and hover effects
         const inner = document.createElement('div');
         inner.className = `w-10 h-10 ${marker.type === 'tree' ? 'bg-emerald-400' : 'bg-emerald-800'} rounded-full flex items-center justify-center shadow-lg border-2 border-white/40 overflow-hidden transition-transform duration-200 hover:scale-110 active:scale-95`;
         el.appendChild(inner);
@@ -162,7 +138,6 @@ const MapComponent: React.FC<MapComponentProps> = ({
           img.referrerPolicy = 'no-referrer';
           inner.appendChild(img);
         } else {
-          // Fallback icon (simplified for DOM)
           inner.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 20A7 7 0 0 1 9.8 6.1C15.5 5 17 4.48 19 2c1 2 2 4.18 2 8 0 5.5-4.78 10-10 10Z"/><path d="M2 21c0-3 1.85-5.36 5.08-6C9.5 14.52 12 13 13 12"/></svg>`;
         }
 
@@ -173,13 +148,11 @@ const MapComponent: React.FC<MapComponentProps> = ({
           .setLngLat([marker.longitude, marker.latitude])
           .addTo(map);
 
-        // Click handler
         el.addEventListener('click', (e) => {
           e.stopPropagation();
           onMarkerClick(marker);
         });
 
-        // Drag handlers
         newMarker.on('dragend', () => {
           const lngLat = newMarker.getLngLat();
           onUpdatePosition({
@@ -193,15 +166,6 @@ const MapComponent: React.FC<MapComponentProps> = ({
       }
     });
   }, [isMapLoaded, markers, canEdit, onMarkerClick, onUpdatePosition]);
-
-  // Zoom to markers on initial load
-  useEffect(() => {
-    if (isMapLoaded && mapRef.current && markers.length > 0) {
-      const bounds = new maplibregl.LngLatBounds();
-      markers.forEach(m => bounds.extend([m.longitude, m.latitude]));
-      mapRef.current.fitBounds(bounds, { padding: 100, maxZoom: 17 });
-    }
-  }, [isMapLoaded]);
 
   return (
     <div className="relative w-full h-full">
@@ -235,7 +199,6 @@ const MapComponent: React.FC<MapComponentProps> = ({
         )}
       </AnimatePresence>
 
-      {/* Zoom Level Indicator */}
       <div className="absolute bottom-6 left-6 z-10 flex flex-col gap-2 pointer-events-none">
         <div className="bg-black/40 backdrop-blur-md border border-white/10 px-3 py-1.5 rounded-full flex items-center gap-2 shadow-lg">
           <div className="w-1.5 h-1.5 bg-emerald-500 rounded-full animate-pulse" />
@@ -258,161 +221,100 @@ export const GardenMap: React.FC = () => {
 
 const GardenMapContent: React.FC = () => {
   const [markers, setMarkers] = useState<PlantMarker[]>([]);
-  const [isUnlocked, setIsUnlocked] = useState(false);
-  const [selectedMarker, setSelectedMarker] = useState<PlantMarker | null>(null);
+  
+  // Detect if we are in the AI Studio editor environment or local dev
+  const isEditorEnv = typeof window !== 'undefined' && (
+    window.location.hostname.includes('ais-dev-') || 
+    window.location.hostname.includes('localhost') || 
+    window.location.hostname.includes('0.0.0.0')
+  );
+
+  const [isUnlocked, setIsUnlocked] = useState(isEditorEnv);
+  const [selectedMarkerId, setSelectedMarkerId] = useState<string | null>(null);
   const [showWelcome, setShowWelcome] = useState(false);
-  const [user, setUser] = useState(auth.currentUser);
   const mapRef = useRef<maplibregl.Map | null>(null);
 
-  // Handle Auth State
+  // Fetch markers on load
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
-      setUser(currentUser);
-      if (!currentUser) {
-        signInAnonymously(auth).catch(err => console.error("Anonymous auth failed:", err));
-      }
-    });
-
-    // Initial connection test
-    getDocFromServer(doc(db, 'test', 'connection')).catch(err => {
-      console.warn("Initial connection test failed:", err.message);
-    });
-
-    return () => unsubscribe();
+    fetchMarkers();
+    if (!localStorage.getItem('welcome_shown')) {
+      setShowWelcome(true);
+    }
   }, []);
 
-  const handleLogin = async () => {
+  const fetchMarkers = async () => {
     try {
-      await signInWithPopup(auth, googleProvider);
-    } catch (err) {
-      console.error("Login failed:", err);
+      const response = await fetch('/api/markers');
+      const data = await response.json();
+      setMarkers(data);
+    } catch (error) {
+      console.error("Failed to fetch markers:", error);
     }
   };
 
-  const handleLogout = async () => {
+  const saveMarkers = async (updatedMarkers: PlantMarker[]) => {
     try {
-      await signOut(auth);
-    } catch (err) {
-      console.error("Logout failed:", err);
-    }
-  };
-
-  // Sync with Firestore
-  useEffect(() => {
-    const q = query(collection(db, 'markers'));
-    const unsubscribe = onSnapshot(q, (snapshot) => {
-      const newMarkers = snapshot.docs.map(doc => doc.data() as PlantMarker);
-      setMarkers(newMarkers);
-      
-      // Update selected marker if it's the one that was updated
-      setSelectedMarker(prev => {
-        if (!prev) return null;
-        const updated = newMarkers.find(m => m.id === prev.id);
-        return updated || null;
+      await fetch('/api/markers', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(updatedMarkers),
       });
-    }, (error) => {
-      handleFirestoreError(error, OperationType.LIST, 'markers');
-    });
-
-    return () => unsubscribe();
-  }, []);
-
-  const handleUnlockEditing = () => {
-    setIsUnlocked(true);
+      setMarkers(updatedMarkers);
+    } catch (error) {
+      console.error("Failed to save markers:", error);
+    }
   };
 
-  const handleLockEditing = () => {
-    setIsUnlocked(false);
-  };
-
+  const selectedMarker = markers.find(m => m.id === selectedMarkerId) || null;
   const canEdit = isUnlocked;
 
-  const onMapClick = useCallback(async (lngLat: { lat: number; lng: number }) => {
-    if (!canEdit) return null;
-
-    const currentUid = auth.currentUser?.uid || 'anonymous';
+  const addMarkerAtCenter = async () => {
+    if (!mapRef.current || !canEdit) return;
+    const center = mapRef.current.getCenter();
     
     const newMarker: PlantMarker = {
       id: Math.random().toString(36).substr(2, 9),
-      uid: currentUid,
-      latitude: lngLat.lat,
-      longitude: lngLat.lng,
+      uid: 'public',
+      latitude: center.lat,
+      longitude: center.lng,
       name: 'New Tree',
       description: '',
       imageUrl: `https://picsum.photos/seed/${Math.random()}/400/300`,
       createdAt: Date.now(),
       type: 'tree'
     };
-
-    try {
-      await setDoc(doc(db, 'markers', newMarker.id), newMarker);
-      return newMarker;
-    } catch (e) {
-      handleFirestoreError(e, OperationType.WRITE, `markers/${newMarker.id}`);
-      return null;
-    }
-  }, [canEdit]);
-
-  const addMarkerAtCenter = async () => {
-    if (!mapRef.current || !canEdit) return;
-    const center = mapRef.current.getCenter();
-    const marker = await onMapClick({
-      lat: center.lat,
-      lng: center.lng
-    });
     
-    if (marker) {
-      setSelectedMarker(marker);
-    }
+    const updated = [...markers, newMarker];
+    await saveMarkers(updated);
+    setSelectedMarkerId(newMarker.id);
   };
 
   const updateMarker = async (updated: PlantMarker) => {
     if (!canEdit) return;
-    try {
-      await setDoc(doc(db, 'markers', updated.id), updated, { merge: true });
-    } catch (e) {
-      handleFirestoreError(e, OperationType.WRITE, `markers/${updated.id}`);
-    }
-  };
-
-  const updatePosition = async (updated: PlantMarker) => {
-    if (!canEdit) return;
-    try {
-      await setDoc(doc(db, 'markers', updated.id), updated, { merge: true });
-    } catch (e) {
-      handleFirestoreError(e, OperationType.WRITE, `markers/${updated.id}`);
-    }
+    const newMarkers = markers.map(m => m.id === updated.id ? updated : m);
+    await saveMarkers(newMarkers);
   };
 
   const deleteMarker = async (id: string) => {
     if (!canEdit) return;
-    try {
-      await deleteDoc(doc(db, 'markers', id));
-      setSelectedMarker(null);
-    } catch (e) {
-      handleFirestoreError(e, OperationType.DELETE, `markers/${id}`);
-    }
+    const newMarkers = markers.filter(m => m.id !== id);
+    await saveMarkers(newMarkers);
+    setSelectedMarkerId(null);
   };
 
   return (
     <div className="relative w-full h-screen bg-gray-900 overflow-hidden">
       <MapComponent 
         markers={markers}
-        onMarkerClick={setSelectedMarker}
+        onMarkerClick={(m) => setSelectedMarkerId(m.id)}
         selectedMarker={selectedMarker}
-        onClosePopup={() => setSelectedMarker(null)}
-        onUpdatePosition={updatePosition}
+        onClosePopup={() => setSelectedMarkerId(null)}
+        onUpdatePosition={updateMarker}
         deleteMarker={deleteMarker}
         mapRef={mapRef}
         canEdit={canEdit}
-        onAnimationComplete={() => {
-          if (!localStorage.getItem('welcome_shown')) {
-            setShowWelcome(true);
-          }
-        }}
       />
 
-      {/* Welcome Popup */}
       <AnimatePresence>
         {showWelcome && (
           <div className="absolute inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-md">
@@ -423,13 +325,10 @@ const GardenMapContent: React.FC = () => {
               className="bg-zinc-900 border border-white/10 p-8 rounded-[32px] shadow-2xl max-w-md w-full text-center relative overflow-hidden"
             >
               <div className="absolute -top-24 -right-24 w-48 h-48 bg-emerald-500/10 rounded-full blur-3xl pointer-events-none" />
-              
               <div className="w-20 h-20 bg-emerald-500/20 rounded-3xl flex items-center justify-center mx-auto mb-8 rotate-3">
                 <MapIcon className="text-emerald-500" size={40} />
               </div>
-
               <h2 className="text-3xl font-bold text-white mb-4 tracking-tight">Welcome to the Garden</h2>
-              
               <div className="space-y-6 text-left mb-10">
                 <div className="flex items-start gap-4">
                   <div className="w-8 h-8 rounded-full bg-white/5 flex items-center justify-center shrink-0 mt-1">
@@ -437,25 +336,19 @@ const GardenMapContent: React.FC = () => {
                   </div>
                   <div>
                     <h4 className="text-white font-medium text-sm mb-1">Explore the Space</h4>
-                    <p className="text-gray-400 text-xs leading-relaxed">
-                      Click and drag to pan the map. Use your mouse wheel or pinch to zoom.
-                    </p>
+                    <p className="text-gray-400 text-xs leading-relaxed">Click and drag to pan the map. Use your mouse wheel or pinch to zoom.</p>
                   </div>
                 </div>
-
                 <div className="flex items-start gap-4">
                   <div className="w-8 h-8 rounded-full bg-white/5 flex items-center justify-center shrink-0 mt-1">
                     <span className="text-emerald-500 font-bold text-xs">02</span>
                   </div>
                   <div>
                     <h4 className="text-white font-medium text-sm mb-1">Discover Plants</h4>
-                    <p className="text-gray-400 text-xs leading-relaxed">
-                      Click on any leaf icon to view photos and details about the plants.
-                    </p>
+                    <p className="text-gray-400 text-xs leading-relaxed">Click on any leaf icon to view photos and details about the plants.</p>
                   </div>
                 </div>
               </div>
-
               <button
                 onClick={() => {
                   setShowWelcome(false);
@@ -470,39 +363,37 @@ const GardenMapContent: React.FC = () => {
         )}
       </AnimatePresence>
 
-      {/* Controls */}
-      <div className="absolute top-0 left-0 z-10 flex flex-col gap-4 p-4">
-        {!isUnlocked ? (
-          <button 
-            onClick={() => setIsUnlocked(true)}
-            className="w-10 h-10 bg-white/5 hover:bg-white/10 backdrop-blur-md rounded-full flex items-center justify-center text-white/40 hover:text-white transition-all active:scale-95 group border border-white/10"
-            title="Unlock Editing"
-          >
-            <Pencil size={18} className="group-hover:scale-110 transition-transform" />
-          </button>
-        ) : (
-          <div className="flex flex-col gap-3">
+      {isEditorEnv && (
+        <div className="absolute top-0 left-0 z-10 flex flex-col gap-4 p-4">
+          {!isUnlocked ? (
             <button 
-              onClick={addMarkerAtCenter}
-              className="w-10 h-10 bg-emerald-500 hover:bg-emerald-600 backdrop-blur-md border border-emerald-500/30 rounded-full flex items-center justify-center text-white transition-all active:scale-95 shadow-xl"
-              title="Add Tree"
+              onClick={() => setIsUnlocked(true)}
+              className="w-10 h-10 bg-white/5 hover:bg-white/10 backdrop-blur-md rounded-full flex items-center justify-center text-white/40 hover:text-white transition-all active:scale-95 group border border-white/10"
+              title="Unlock Editing"
             >
-              <Plus size={20} strokeWidth={1.5} />
+              <Pencil size={18} className="group-hover:scale-110 transition-transform" />
             </button>
-            <button 
-              onClick={handleLockEditing}
-              className="w-10 h-10 bg-white/5 hover:bg-white/10 backdrop-blur-md border border-white/10 rounded-full flex items-center justify-center text-white/60 hover:text-white transition-all active:scale-95 shadow-lg"
-              title="Lock Editing"
-            >
-              <ShieldCheck size={18} strokeWidth={1.5} />
-            </button>
-          </div>
-        )}
-      </div>
+          ) : (
+            <div className="flex flex-col gap-3">
+              <button 
+                onClick={addMarkerAtCenter}
+                className="w-10 h-10 bg-emerald-500 hover:bg-emerald-600 backdrop-blur-md border border-emerald-500/30 rounded-full flex items-center justify-center text-white transition-all active:scale-95 shadow-xl"
+                title="Add Tree"
+              >
+                <Plus size={20} strokeWidth={1.5} />
+              </button>
+              <button 
+                onClick={() => setIsUnlocked(false)}
+                className="w-10 h-10 bg-white/5 hover:bg-white/10 backdrop-blur-md border border-white/10 rounded-full flex items-center justify-center text-white/60 hover:text-white transition-all active:scale-95 shadow-lg"
+                title="Lock Editing"
+              >
+                <ShieldCheck size={18} strokeWidth={1.5} />
+              </button>
+            </div>
+          )}
+        </div>
+      )}
 
-      {/* Unlock Confirmation Popup removed for live feel */}
-
-      {/* Popup Overlay */}
       <AnimatePresence>
         {selectedMarker && (
           <div className="absolute inset-y-0 right-0 z-40 pointer-events-none flex items-center justify-end p-6 md:p-12">
@@ -511,7 +402,7 @@ const GardenMapContent: React.FC = () => {
                 marker={selectedMarker}
                 onSave={updateMarker}
                 onDelete={deleteMarker}
-                onClose={() => setSelectedMarker(null)}
+                onClose={() => setSelectedMarkerId(null)}
                 canEdit={canEdit}
               />
             </div>
