@@ -30,9 +30,9 @@ service cloud.firestore {
              data.uid is string && data.uid.size() < 100 &&
              data.latitude is number &&
              data.longitude is number &&
-             data.name is string && data.name.size() > 0 && data.name.size() < 500 &&
+             data.name is string && data.name.size() < 500 &&
              (!('description' in data) || (data.description is string && data.description.size() < 10000)) &&
-             (!('imageUrl' in data) || (data.imageUrl is string && data.imageUrl.size() < 1000000)) &&
+             (!('imageUrl' in data) || (data.imageUrl is string && data.imageUrl.size() < 1048576)) &&
              data.createdAt is number &&
              data.type in ['tree', 'plant'];
     }
@@ -56,9 +56,18 @@ service cloud.firestore {
                       request.resource.data.id == markerId &&
                       request.resource.data.uid == request.auth.uid;
       
-      // Allow update/delete if authenticated (fully collaborative)
-      allow update: if isAuthenticated() && isValidMarker(request.resource.data);
-      allow delete: if isAuthenticated();
+      // Allow update if authenticated. 
+      // We ensure the internal ID matches the document ID and doesn't change.
+      // We also ensure the original author UID and createdAt timestamp are preserved.
+      allow update: if isAuthenticated() && 
+                      isValidMarker(request.resource.data) &&
+                      request.resource.data.id == markerId &&
+                      request.resource.data.id == resource.data.id &&
+                      request.resource.data.uid == resource.data.uid &&
+                      request.resource.data.createdAt == resource.data.createdAt;
+      
+      allow delete: if isAuthenticated() && 
+                      (request.auth.uid == resource.data.uid || isAdmin());
     }
 
     match /{path=**} {

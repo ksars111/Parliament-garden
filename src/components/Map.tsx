@@ -129,10 +129,35 @@ const MapComponent: React.FC<MapComponentProps> = ({
       const existingMarker = markersLayerRef.current[marker.id];
 
       if (existingMarker) {
-        // Update position if not dragging
-        // Note: MapLibre handles dragging internally if enabled
         existingMarker.setLngLat([marker.longitude, marker.latitude]);
         existingMarker.setDraggable(canEdit);
+        
+        // Update visual style if type or image changed
+        const el = existingMarker.getElement();
+        const inner = el.querySelector('div');
+        if (inner) {
+          inner.className = `w-10 h-10 ${marker.type === 'tree' ? 'bg-emerald-400' : 'bg-emerald-800'} rounded-full flex items-center justify-center shadow-lg border-2 border-white/40 overflow-hidden transition-transform duration-200 hover:scale-110 active:scale-95`;
+          
+          // Update image or icon
+          const img = inner.querySelector('img');
+          if (marker.imageUrl) {
+            if (img) {
+              if (img.src !== marker.imageUrl) img.src = marker.imageUrl;
+            } else {
+              inner.innerHTML = '';
+              const newImg = document.createElement('img');
+              newImg.src = marker.imageUrl;
+              newImg.className = 'w-full h-full object-cover';
+              newImg.referrerPolicy = 'no-referrer';
+              inner.appendChild(newImg);
+            }
+          } else if (img || inner.querySelector('svg')) {
+            // If no image, ensure fallback icon is shown
+            if (img || !inner.querySelector('svg')) {
+              inner.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 20A7 7 0 0 1 9.8 6.1C15.5 5 17 4.48 19 2c1 2 2 4.18 2 8 0 5.5-4.78 10-10 10Z"/><path d="M2 21c0-3 1.85-5.36 5.08-6C9.5 14.52 12 13 13 12"/></svg>`;
+            }
+          }
+        }
       } else {
         // Create custom marker element
         const el = document.createElement('div');

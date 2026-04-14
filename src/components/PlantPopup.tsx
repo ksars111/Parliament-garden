@@ -18,8 +18,62 @@ export const PlantPopup: React.FC<PlantPopupProps> = ({ marker, onSave, onDelete
   const [type, setType] = useState(marker.type);
   const [isExpanded, setIsExpanded] = useState(false);
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isResizing, setIsResizing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const resizeImage = (file: File): Promise<string> => {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        const img = new Image();
+        img.onload = () => {
+          const canvas = document.createElement('canvas');
+          const MAX_WIDTH = 1600;
+          const MAX_HEIGHT = 1600;
+          let width = img.width;
+          let height = img.height;
+
+          if (width > height) {
+            if (width > MAX_WIDTH) {
+              height *= MAX_WIDTH / width;
+              width = MAX_WIDTH;
+            }
+          } else {
+            if (height > MAX_HEIGHT) {
+              width *= MAX_HEIGHT / height;
+              height = MAX_HEIGHT;
+            }
+          }
+
+          canvas.width = width;
+          canvas.height = height;
+          const ctx = canvas.getContext('2d');
+          if (!ctx) {
+            reject(new Error('Could not get canvas context'));
+            return;
+          }
+          
+          ctx.drawImage(img, 0, 0, width, height);
+          
+          // Start with high quality and reduce if needed to fit under 1MB
+          let quality = 0.8;
+          let dataUrl = canvas.toDataURL('image/jpeg', quality);
+          
+          // Firestore limit is 1MB, we target ~800KB for safety
+          while (dataUrl.length > 1000000 && quality > 0.1) {
+            quality -= 0.1;
+            dataUrl = canvas.toDataURL('image/jpeg', quality);
+          }
+          
+          resolve(dataUrl);
+        };
+        img.src = e.target?.result as string;
+      };
+      reader.onerror = reject;
+      reader.readAsDataURL(file);
+    });
+  };
 
   // Sync state when marker changes (e.g. background update)
   React.useEffect(() => {
@@ -39,21 +93,21 @@ export const PlantPopup: React.FC<PlantPopupProps> = ({ marker, onSave, onDelete
     onSave({ ...marker, name, description, imageUrl, type });
   };
 
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
-      // Basic size check (e.g., 800KB) to stay under Firestore 1MB limit
-      if (file.size > 0.8 * 1024 * 1024) {
-        setError("Image is too large. Please select an image under 800KB.");
-        setTimeout(() => setError(null), 3000);
-        return;
+      setIsResizing(true);
+      setError(null);
+      
+      try {
+        const resizedDataUrl = await resizeImage(file);
+        setImageUrl(resizedDataUrl);
+      } catch (err) {
+        console.error("Resizing failed:", err);
+        setError("Failed to process image. Please try another one.");
+      } finally {
+        setIsResizing(false);
       }
-
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        setImageUrl(reader.result as string);
-      };
-      reader.readAsDataURL(file);
     }
   };
 
@@ -71,9 +125,14 @@ export const PlantPopup: React.FC<PlantPopupProps> = ({ marker, onSave, onDelete
               <img 
                 src={imageUrl} 
                 alt={name} 
-                className="w-full h-full object-cover"
+                className={`w-full h-full object-cover transition-opacity duration-300 ${isResizing ? 'opacity-50' : 'opacity-100'}`}
                 referrerPolicy="no-referrer"
               />
+              {isResizing && (
+                <div className="absolute inset-0 flex items-center justify-center bg-black/20">
+                  <div className="w-8 h-8 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                </div>
+              )}
               <button
                 onClick={() => setIsModalOpen(true)}
                 className="absolute bottom-3 right-3 p-2 bg-black/40 hover:bg-black/60 backdrop-blur-md rounded-lg text-white opacity-0 group-hover:opacity-100 transition-all transform translate-y-2 group-hover:translate-y-0"
@@ -84,7 +143,11 @@ export const PlantPopup: React.FC<PlantPopupProps> = ({ marker, onSave, onDelete
             </>
           ) : (
             <div className="w-full h-full flex items-center justify-center text-gray-400 bg-gray-50">
-              <Camera size={48} strokeWidth={1} />
+              {isResizing ? (
+                <div className="w-12 h-12 border-4 border-emerald-500/20 border-t-emerald-500 rounded-full animate-spin" />
+              ) : (
+                <Camera size={48} strokeWidth={1} />
+              )}
             </div>
           )}
           <button 
@@ -151,6 +214,15 @@ export const PlantPopup: React.FC<PlantPopupProps> = ({ marker, onSave, onDelete
                     className="flex-1 px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-all text-sm"
                     placeholder="URL or upload..."
                   />
+                  {imageUrl && (
+                    <button
+                      onClick={() => setImageUrl('')}
+                      className="p-2 bg-red-50 hover:bg-red-100 text-red-500 rounded-lg transition-colors"
+                      title="Clear image"
+                    >
+                      <X size={18} />
+                    </button>
+                  )}
                   <button
                     onClick={() => fileInputRef.current?.click()}
                     className="p-2 bg-gray-100 hover:bg-gray-200 text-gray-600 rounded-lg transition-colors"
@@ -168,6 +240,13 @@ export const PlantPopup: React.FC<PlantPopupProps> = ({ marker, onSave, onDelete
                 </div>
               </div>
               <div className="flex gap-2 pt-2">
+                <button
+                  onClick={() => onDelete(marker.id)}
+                  className="p-2 bg-red-50 hover:bg-red-100 text-red-500 rounded-lg transition-colors"
+                  title="Delete marker"
+                >
+                  <Trash2 size={18} />
+                </button>
                 <button
                   onClick={handleSave}
                   className="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white py-2 rounded-lg text-sm font-medium flex items-center justify-center gap-2 transition-colors"
@@ -187,8 +266,8 @@ export const PlantPopup: React.FC<PlantPopupProps> = ({ marker, onSave, onDelete
             <div className="space-y-3">
               <div className="flex items-center justify-between">
                 <h3 className="text-lg font-semibold text-gray-900 leading-tight">{name || 'Unnamed Plant'}</h3>
-                <span className={`text-[10px] font-bold uppercase tracking-widest px-2 py-1 rounded-md ${marker.type === 'tree' ? 'bg-emerald-100 text-emerald-600' : 'bg-emerald-800 text-white'}`}>
-                  {marker.type}
+                <span className={`text-[10px] font-bold uppercase tracking-widest px-2 py-1 rounded-md ${type === 'tree' ? 'bg-emerald-100 text-emerald-600' : 'bg-emerald-800 text-white'}`}>
+                  {type}
                 </span>
               </div>
               <div className="mt-1">
@@ -204,15 +283,7 @@ export const PlantPopup: React.FC<PlantPopupProps> = ({ marker, onSave, onDelete
                     </button>
                   )}
                 </div>
-                <div className="flex items-center justify-end pt-2 border-t border-gray-100">
-                  <button
-                    onClick={() => onDelete(marker.id)}
-                    className="p-2 text-gray-400 hover:text-red-500 transition-colors"
-                    title="Delete marker"
-                  >
-                    <Trash2 size={18} />
-                  </button>
-              </div>
+                <div className="pt-2 border-t border-gray-100" />
             </div>
           )}
         </div>
