@@ -46,12 +46,19 @@ const MapComponent: React.FC<MapComponentProps> = ({
   useEffect(() => {
     if (!containerRef.current || !mapRef.current) return;
 
+    let resizeTimer: NodeJS.Timeout;
     const resizeObserver = new ResizeObserver(() => {
-      mapRef.current?.resize();
+      clearTimeout(resizeTimer);
+      resizeTimer = setTimeout(() => {
+        mapRef.current?.resize();
+      }, 100);
     });
 
     resizeObserver.observe(containerRef.current);
-    return () => resizeObserver.disconnect();
+    return () => {
+      resizeObserver.disconnect();
+      clearTimeout(resizeTimer);
+    };
   }, [isMapLoaded]);
 
   // Initialize Map
@@ -137,7 +144,10 @@ const MapComponent: React.FC<MapComponentProps> = ({
       const existingMarker = markersLayerRef.current[marker.id];
 
       if (existingMarker) {
-        existingMarker.setLngLat([marker.longitude, marker.latitude]);
+        const currentPos = existingMarker.getLngLat();
+        if (currentPos.lng !== marker.longitude || currentPos.lat !== marker.latitude) {
+          existingMarker.setLngLat([marker.longitude, marker.latitude]);
+        }
         existingMarker.setDraggable(canEdit);
       } else {
         const el = document.createElement('div');
@@ -293,21 +303,28 @@ const GardenMapContent: React.FC = () => {
     }
   }, []);
 
+  const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
   const saveMarkers = useCallback(async (updatedMarkers: PlantMarker[]) => {
     if (!isEditorEnv) return;
+    
+    if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
+    
     setIsSyncing(true);
-    try {
-      const response = await fetch('/api/markers', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(updatedMarkers),
-      });
-      if (!response.ok) throw new Error('Failed to save');
-    } catch (error) {
-      console.error("Failed to save markers:", error);
-    } finally {
-      setTimeout(() => setIsSyncing(false), 500);
-    }
+    saveTimeoutRef.current = setTimeout(async () => {
+      try {
+        const response = await fetch('/api/markers', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(updatedMarkers),
+        });
+        if (!response.ok) throw new Error('Failed to save');
+      } catch (error) {
+        console.error("Failed to save markers:", error);
+      } finally {
+        setTimeout(() => setIsSyncing(false), 500);
+      }
+    }, 500); // 500ms debounce
   }, [isEditorEnv]);
 
   const selectedMarker = markers.find(m => m.id === selectedMarkerId) || null;
@@ -356,13 +373,21 @@ const GardenMapContent: React.FC = () => {
     setSelectedMarkerId(null);
   }, [canEdit, saveMarkers]);
 
+  const handleMarkerClick = useCallback((m: PlantMarker) => {
+    setSelectedMarkerId(m.id);
+  }, []);
+
+  const handleClosePopup = useCallback(() => {
+    setSelectedMarkerId(null);
+  }, []);
+
   return (
     <div className="relative w-full h-screen bg-gray-900 overflow-hidden">
       <MapComponent 
         markers={markers}
-        onMarkerClick={(m) => setSelectedMarkerId(m.id)}
+        onMarkerClick={handleMarkerClick}
         selectedMarker={selectedMarker}
-        onClosePopup={() => setSelectedMarkerId(null)}
+        onClosePopup={handleClosePopup}
         onUpdatePosition={updateMarker}
         deleteMarker={deleteMarker}
         mapRef={mapRef}
