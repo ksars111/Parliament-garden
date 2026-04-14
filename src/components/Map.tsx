@@ -4,6 +4,7 @@ import 'maplibre-gl/dist/maplibre-gl.css';
 import { Leaf, Plus, Map as MapIcon, X, Pencil, ShieldCheck } from 'lucide-react';
 import { PlantMarker } from '../types';
 import { PlantPopup } from './PlantPopup';
+import { GitHubSync } from './GitHubSync';
 import { motion, AnimatePresence } from 'motion/react';
 import { ErrorBoundary } from './ErrorBoundary';
 
@@ -362,6 +363,12 @@ const GardenMapContent: React.FC = () => {
           </div>
         )}
       </AnimatePresence>
+
+      {isEditorEnv && (
+        <div className="absolute top-0 right-0 z-10 p-4">
+          <GitHubSync />
+        </div>
+      )}
 
       {isEditorEnv && (
         <div className="absolute top-0 left-0 z-10 flex flex-col gap-4 p-4">
