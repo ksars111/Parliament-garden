@@ -237,19 +237,22 @@ const GardenMapContent: React.FC = () => {
 
   // Fetch markers on load
   useEffect(() => {
-    fetchMarkers();
+    if (isEditorEnv) {
+      fetchMarkers();
+    }
     if (!localStorage.getItem('welcome_shown')) {
       setShowWelcome(true);
     }
-  }, []);
+  }, [isEditorEnv]);
 
   const fetchMarkers = async () => {
     try {
       const response = await fetch('/api/markers');
+      if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
       const data = await response.json();
       setMarkers(data);
     } catch (error) {
-      console.error("Failed to fetch markers:", error);
+      console.error("Failed to fetch markers from API:", error);
     }
   };
 
