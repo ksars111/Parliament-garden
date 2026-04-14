@@ -1,7 +1,7 @@
 import React, { useState, useCallback, useEffect, useRef } from 'react';
 import maplibregl from 'maplibre-gl';
 import 'maplibre-gl/dist/maplibre-gl.css';
-import { Leaf, Plus, Map as MapIcon, X, Pencil, ShieldCheck, Copy, Check } from 'lucide-react';
+import { Leaf, Plus, Map as MapIcon, X, Pencil, ShieldCheck, Copy, Check, Save } from 'lucide-react';
 import { PlantMarker } from '../types';
 import { PlantPopup } from './PlantPopup';
 import { motion, AnimatePresence } from 'motion/react';
@@ -273,6 +273,7 @@ const GardenMapContent: React.FC = () => {
   const [showWelcome, setShowWelcome] = useState(false);
   const [copied, setCopied] = useState(false);
   const [isSyncing, setIsSyncing] = useState(false);
+  const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
   const mapRef = useRef<maplibregl.Map | null>(null);
 
   // Fetch markers on load
@@ -303,29 +304,28 @@ const GardenMapContent: React.FC = () => {
     }
   }, []);
 
-  const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
-
   const saveMarkers = useCallback(async (updatedMarkers: PlantMarker[]) => {
     if (!isEditorEnv) return;
     
-    if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
-    
     setIsSyncing(true);
-    saveTimeoutRef.current = setTimeout(async () => {
-      try {
-        const response = await fetch('/api/markers', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(updatedMarkers),
-        });
-        if (!response.ok) throw new Error('Failed to save');
-      } catch (error) {
-        console.error("Failed to save markers:", error);
-      } finally {
-        setTimeout(() => setIsSyncing(false), 500);
-      }
-    }, 500); // 500ms debounce
+    try {
+      const response = await fetch('/api/markers', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(updatedMarkers),
+      });
+      if (!response.ok) throw new Error('Failed to save');
+      setHasUnsavedChanges(false);
+    } catch (error) {
+      console.error("Failed to save markers:", error);
+    } finally {
+      setTimeout(() => setIsSyncing(false), 500);
+    }
   }, [isEditorEnv]);
+
+  const handleManualSave = useCallback(() => {
+    saveMarkers(markers);
+  }, [markers, saveMarkers]);
 
   const selectedMarker = markers.find(m => m.id === selectedMarkerId) || null;
   const canEdit = isUnlocked;
@@ -348,30 +348,30 @@ const GardenMapContent: React.FC = () => {
     
     setMarkers(prev => {
       const updated = [...prev, newMarker];
-      saveMarkers(updated);
+      setHasUnsavedChanges(true);
       return updated;
     });
     setSelectedMarkerId(newMarker.id);
-  }, [canEdit, saveMarkers]);
+  }, [canEdit]);
 
   const updateMarker = useCallback(async (updated: PlantMarker) => {
     if (!canEdit) return;
     setMarkers(prev => {
       const updatedList = prev.map(m => m.id === updated.id ? updated : m);
-      saveMarkers(updatedList);
+      setHasUnsavedChanges(true);
       return updatedList;
     });
-  }, [canEdit, saveMarkers]);
+  }, [canEdit]);
 
   const deleteMarker = useCallback(async (id: string) => {
     if (!canEdit) return;
     setMarkers(prev => {
       const updatedList = prev.filter(m => m.id !== id);
-      saveMarkers(updatedList);
+      setHasUnsavedChanges(true);
       return updatedList;
     });
     setSelectedMarkerId(null);
-  }, [canEdit, saveMarkers]);
+  }, [canEdit]);
 
   const handleMarkerClick = useCallback((m: PlantMarker) => {
     setSelectedMarkerId(m.id);
@@ -380,6 +380,19 @@ const GardenMapContent: React.FC = () => {
   const handleClosePopup = useCallback(() => {
     setSelectedMarkerId(null);
   }, []);
+
+  // Keyboard shortcuts
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.key === 's') {
+        e.preventDefault();
+        handleManualSave();
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [handleManualSave]);
 
   return (
     <div className="relative w-full h-screen bg-gray-900 overflow-hidden">
@@ -455,6 +468,13 @@ const GardenMapContent: React.FC = () => {
             </button>
           ) : (
             <div className="flex flex-col gap-3">
+              <button 
+                onClick={handleManualSave}
+                className={`w-10 h-10 ${hasUnsavedChanges ? 'bg-amber-500 animate-pulse' : 'bg-emerald-500'} hover:opacity-90 backdrop-blur-md border border-white/10 rounded-full flex items-center justify-center text-white transition-all active:scale-95 shadow-xl`}
+                title={hasUnsavedChanges ? "Save Unsaved Changes" : "All Changes Saved"}
+              >
+                <Save size={20} strokeWidth={1.5} />
+              </button>
               <button 
                 onClick={addMarkerAtCenter}
                 className="w-10 h-10 bg-emerald-500 hover:bg-emerald-600 backdrop-blur-md border border-emerald-500/30 rounded-full flex items-center justify-center text-white transition-all active:scale-95 shadow-xl"

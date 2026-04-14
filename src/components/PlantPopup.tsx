@@ -24,22 +24,14 @@ export const PlantPopup: React.FC<PlantPopupProps> = ({ marker, onSave, onDelete
   const fileInputRef = useRef<HTMLInputElement>(null);
   const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
-  // Auto-save logic
-  useEffect(() => {
-    if (!isEditing) return;
-
-    if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
-    
+  const handleSave = () => {
     setIsSaving(true);
-    saveTimeoutRef.current = setTimeout(() => {
-      onSave({ ...marker, name, description, imageUrl, type });
+    onSave({ ...marker, name, description, imageUrl, type });
+    setTimeout(() => {
       setIsSaving(false);
-    }, 1000);
-
-    return () => {
-      if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
-    };
-  }, [name, description, imageUrl, type, isEditing]);
+      setIsEditing(false);
+    }, 500);
+  };
 
   // Sync state when marker changes from external source
   useEffect(() => {
@@ -236,15 +228,15 @@ export const PlantPopup: React.FC<PlantPopupProps> = ({ marker, onSave, onDelete
               </div>
               <div className="flex gap-2 pt-2">
                 <button
-                  onClick={() => setIsEditing(false)}
+                  onClick={handleSave}
                   className="flex-[3] bg-emerald-600 hover:bg-emerald-700 text-white py-2 rounded-lg text-sm font-medium flex items-center justify-center gap-2 transition-colors"
                 >
                   {isSaving ? (
                     <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
                   ) : (
-                    <Check size={16} />
+                    <Save size={16} />
                   )}
-                  Done Editing
+                  Save Changes
                 </button>
                 <button
                   onClick={() => onDelete(marker.id)}
