@@ -1,7 +1,7 @@
 import React, { useState, useCallback, useEffect, useRef } from 'react';
 import maplibregl from 'maplibre-gl';
 import 'maplibre-gl/dist/maplibre-gl.css';
-import { Leaf, Plus, Map as MapIcon, X, Pencil, ShieldCheck } from 'lucide-react';
+import { Leaf, Plus, Map as MapIcon, X, Pencil, ShieldCheck, Copy, Check } from 'lucide-react';
 import { PlantMarker } from '../types';
 import { PlantPopup } from './PlantPopup';
 import { motion, AnimatePresence } from 'motion/react';
@@ -21,6 +21,7 @@ interface MapComponentProps {
   deleteMarker: (id: string) => void;
   mapRef: React.MutableRefObject<maplibregl.Map | null>;
   canEdit?: boolean;
+  isSyncing?: boolean;
   onAnimationComplete?: () => void;
 }
 
@@ -33,6 +34,7 @@ const MapComponent: React.FC<MapComponentProps> = ({
   deleteMarker,
   mapRef,
   canEdit = false,
+  isSyncing = false,
   onAnimationComplete
 }) => {
   const containerRef = useRef<HTMLDivElement>(null);
@@ -201,6 +203,19 @@ const MapComponent: React.FC<MapComponentProps> = ({
       </AnimatePresence>
 
       <div className="absolute bottom-6 left-6 z-10 flex flex-col gap-2 pointer-events-none">
+        {isSyncing && (
+          <motion.div 
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: 10 }}
+            className="bg-emerald-500/90 backdrop-blur-md border border-emerald-400/30 px-3 py-1.5 rounded-full flex items-center gap-2 shadow-lg"
+          >
+            <div className="w-1.5 h-1.5 bg-white rounded-full animate-pulse" />
+            <span className="text-[10px] font-mono font-bold text-white uppercase tracking-widest">
+              Syncing to File...
+            </span>
+          </motion.div>
+        )}
         <div className="bg-black/40 backdrop-blur-md border border-white/10 px-3 py-1.5 rounded-full flex items-center gap-2 shadow-lg">
           <div className="w-1.5 h-1.5 bg-emerald-500 rounded-full animate-pulse" />
           <span className="text-[10px] font-mono font-medium text-white/80 uppercase tracking-widest">
@@ -233,6 +248,8 @@ const GardenMapContent: React.FC = () => {
   const [isUnlocked, setIsUnlocked] = useState(isEditorEnv);
   const [selectedMarkerId, setSelectedMarkerId] = useState<string | null>(null);
   const [showWelcome, setShowWelcome] = useState(false);
+  const [copied, setCopied] = useState(false);
+  const [isSyncing, setIsSyncing] = useState(false);
   const mapRef = useRef<maplibregl.Map | null>(null);
 
   // Fetch markers on load
@@ -244,6 +261,13 @@ const GardenMapContent: React.FC = () => {
       setShowWelcome(true);
     }
   }, [isEditorEnv]);
+
+  const copyData = () => {
+    const data = JSON.stringify(markers, null, 2);
+    navigator.clipboard.writeText(data);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
 
   const fetchMarkers = async () => {
     try {
@@ -257,15 +281,19 @@ const GardenMapContent: React.FC = () => {
   };
 
   const saveMarkers = async (updatedMarkers: PlantMarker[]) => {
+    if (!isEditorEnv) return;
+    setIsSyncing(true);
     try {
-      await fetch('/api/markers', {
+      const response = await fetch('/api/markers', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(updatedMarkers),
       });
-      setMarkers(updatedMarkers);
+      if (!response.ok) throw new Error('Failed to save');
     } catch (error) {
       console.error("Failed to save markers:", error);
+    } finally {
+      setTimeout(() => setIsSyncing(false), 500);
     }
   };
 
@@ -288,21 +316,30 @@ const GardenMapContent: React.FC = () => {
       type: 'tree'
     };
     
-    const updated = [...markers, newMarker];
-    await saveMarkers(updated);
+    setMarkers(prev => {
+      const updated = [...prev, newMarker];
+      saveMarkers(updated);
+      return updated;
+    });
     setSelectedMarkerId(newMarker.id);
   };
 
   const updateMarker = async (updated: PlantMarker) => {
     if (!canEdit) return;
-    const newMarkers = markers.map(m => m.id === updated.id ? updated : m);
-    await saveMarkers(newMarkers);
+    setMarkers(prev => {
+      const updatedList = prev.map(m => m.id === updated.id ? updated : m);
+      saveMarkers(updatedList);
+      return updatedList;
+    });
   };
 
   const deleteMarker = async (id: string) => {
     if (!canEdit) return;
-    const newMarkers = markers.filter(m => m.id !== id);
-    await saveMarkers(newMarkers);
+    setMarkers(prev => {
+      const updatedList = prev.filter(m => m.id !== id);
+      saveMarkers(updatedList);
+      return updatedList;
+    });
     setSelectedMarkerId(null);
   };
 
@@ -317,6 +354,7 @@ const GardenMapContent: React.FC = () => {
         deleteMarker={deleteMarker}
         mapRef={mapRef}
         canEdit={canEdit}
+        isSyncing={isSyncing}
       />
 
       <AnimatePresence>
@@ -392,6 +430,13 @@ const GardenMapContent: React.FC = () => {
                 title="Lock Editing"
               >
                 <ShieldCheck size={18} strokeWidth={1.5} />
+              </button>
+              <button 
+                onClick={copyData}
+                className={`w-10 h-10 ${copied ? 'bg-emerald-500' : 'bg-white/5 hover:bg-white/10'} backdrop-blur-md border border-white/10 rounded-full flex items-center justify-center text-white transition-all active:scale-95 shadow-lg`}
+                title="Copy Data for GitHub"
+              >
+                {copied ? <Check size={18} /> : <Copy size={18} />}
               </button>
             </div>
           )}

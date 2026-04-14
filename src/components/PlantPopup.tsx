@@ -20,6 +20,7 @@ export const PlantPopup: React.FC<PlantPopupProps> = ({ marker, onSave, onDelete
   const [isExpanded, setIsExpanded] = useState(false);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+  const [isUploading, setIsUploading] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
@@ -56,22 +57,72 @@ export const PlantPopup: React.FC<PlantPopupProps> = ({ marker, onSave, onDelete
     ? `${description.slice(0, TRUNCATE_LIMIT)}...` 
     : description;
 
+  const resizeImage = (file: File, maxWidth: number, maxHeight: number): Promise<Blob> => {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.readAsDataURL(file);
+      reader.onload = (event) => {
+        const img = new Image();
+        img.src = event.target?.result as string;
+        img.onload = () => {
+          const canvas = document.createElement('canvas');
+          let width = img.width;
+          let height = img.height;
+
+          if (width > height) {
+            if (width > maxWidth) {
+              height *= maxWidth / width;
+              width = maxWidth;
+            }
+          } else {
+            if (height > maxHeight) {
+              width *= maxHeight / height;
+              height = maxHeight;
+            }
+          }
+
+          canvas.width = width;
+          canvas.height = height;
+          const ctx = canvas.getContext('2d');
+          ctx?.drawImage(img, 0, 0, width, height);
+
+          canvas.toBlob((blob) => {
+            if (blob) resolve(blob);
+            else reject(new Error('Canvas to Blob failed'));
+          }, 'image/jpeg', 0.85);
+        };
+      };
+      reader.onerror = (error) => reject(error);
+    });
+  };
+
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
-    // For local storage, we'll convert to base64 for now
-    // In a real production app, you'd upload to a server
-    if (file.size > 800 * 1024) {
-      alert("Image is too large. Please select an image under 800KB.");
-      return;
-    }
+    setIsUploading(true);
+    try {
+      const resizedBlob = await resizeImage(file, 1200, 1200);
+      const formData = new FormData();
+      formData.append('image', resizedBlob, file.name.replace(/\.[^/.]+$/, "") + ".jpg");
 
-    const reader = new FileReader();
-    reader.onloadend = () => {
-      setImageUrl(reader.result as string);
-    };
-    reader.readAsDataURL(file);
+      const response = await fetch('/api/upload', {
+        method: 'POST',
+        body: formData,
+      });
+      
+      if (!response.ok) throw new Error('Upload failed');
+      
+      const data = await response.json();
+      if (data.imageUrl) {
+        setImageUrl(data.imageUrl);
+      }
+    } catch (error) {
+      console.error('Upload failed:', error);
+      alert("Failed to upload image. Please try again.");
+    } finally {
+      setIsUploading(false);
+    }
   };
 
   return (
@@ -164,10 +215,15 @@ export const PlantPopup: React.FC<PlantPopupProps> = ({ marker, onSave, onDelete
                   />
                   <button
                     onClick={() => fileInputRef.current?.click()}
-                    className="p-2 bg-gray-100 hover:bg-gray-200 text-gray-600 rounded-lg transition-colors"
+                    disabled={isUploading}
+                    className={`p-2 ${isUploading ? 'bg-gray-50 text-gray-300' : 'bg-gray-100 hover:bg-gray-200 text-gray-600'} rounded-lg transition-colors flex items-center justify-center`}
                     title="Upload image"
                   >
-                    <Upload size={18} />
+                    {isUploading ? (
+                      <div className="w-4 h-4 border-2 border-gray-300 border-t-emerald-500 rounded-full animate-spin" />
+                    ) : (
+                      <Upload size={18} />
+                    )}
                   </button>
                   <input
                     ref={fileInputRef}
