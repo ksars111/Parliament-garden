@@ -16,14 +16,11 @@ export const PlantPopup: React.FC<PlantPopupProps> = ({ marker, onSave, onDelete
   const [description, setDescription] = useState(marker.description);
   const [imageUrl, setImageUrl] = useState(marker.imageUrl);
   const [type, setType] = useState(marker.type);
-  const [isExpanded, setIsExpanded] = useState(false);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isResizing, setIsResizing] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
-  const [isClamped, setIsClamped] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const descriptionRef = useRef<HTMLParagraphElement>(null);
   const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   const resizeImage = (file: File): Promise<string> => {
@@ -119,14 +116,6 @@ export const PlantPopup: React.FC<PlantPopupProps> = ({ marker, onSave, onDelete
       }
     };
   }, [name, description, imageUrl, type, marker, onSave, canEdit]);
-
-  // Check for overflow to show "Show more"
-  useEffect(() => {
-    if (descriptionRef.current) {
-      const { scrollHeight, clientHeight } = descriptionRef.current;
-      setIsClamped(scrollHeight > clientHeight);
-    }
-  }, [description, isExpanded]);
 
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -315,20 +304,9 @@ export const PlantPopup: React.FC<PlantPopupProps> = ({ marker, onSave, onDelete
                 </span>
               </div>
               <div className="mt-1">
-                  <p 
-                    ref={descriptionRef}
-                    className={`text-sm text-gray-600 leading-relaxed whitespace-pre-wrap ${!isExpanded ? 'line-clamp-5' : ''}`}
-                  >
+                  <p className="text-sm text-gray-600 leading-relaxed whitespace-pre-wrap">
                     {description || 'No description provided yet.'}
                   </p>
-                  {(isClamped || isExpanded) && (
-                    <button
-                      onClick={() => setIsExpanded(!isExpanded)}
-                      className="text-xs font-semibold text-gray-400 hover:text-emerald-600 mt-1 underline underline-offset-4 decoration-gray-200 hover:decoration-emerald-200 transition-all"
-                    >
-                      {isExpanded ? 'Show less' : 'Show more'}
-                    </button>
-                  )}
                 </div>
                 <div className="pt-2 border-t border-gray-100" />
             </div>
