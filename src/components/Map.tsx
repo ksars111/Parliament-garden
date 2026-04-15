@@ -33,6 +33,7 @@ interface MapComponentProps {
   mapRef: React.MutableRefObject<maplibregl.Map | null>;
   canEdit?: boolean;
   onAnimationComplete?: () => void;
+  isDataLoading?: boolean;
 }
 
 const MapComponent: React.FC<MapComponentProps> = ({ 
@@ -44,12 +45,14 @@ const MapComponent: React.FC<MapComponentProps> = ({
   deleteMarker,
   mapRef,
   canEdit = false,
-  onAnimationComplete
+  onAnimationComplete,
+  isDataLoading = false
 }) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const [isMapLoaded, setIsMapLoaded] = useState(false);
   const [zoomLevel, setZoomLevel] = useState(INITIAL_ZOOM);
   const markersLayerRef = useRef<Record<string, maplibregl.Marker>>({});
+  const hasInitialFit = useRef(false);
 
   // Initialize Map
   useEffect(() => {
@@ -87,9 +90,6 @@ const MapComponent: React.FC<MapComponentProps> = ({
     map.on('load', () => {
       setIsMapLoaded(true);
       setZoomLevel(map.getZoom());
-      if (onAnimationComplete) {
-        onAnimationComplete();
-      }
     });
 
     map.on('zoom', () => {
@@ -205,27 +205,35 @@ const MapComponent: React.FC<MapComponentProps> = ({
         markersLayerRef.current[marker.id] = newMarker;
       }
     });
-  }, [isMapLoaded, markers, canEdit, onMarkerClick, onUpdatePosition]);
 
-  // Zoom to markers on initial load
-  useEffect(() => {
-    if (isMapLoaded && mapRef.current && markers.length > 0) {
+    // Initial fit bounds when markers are first loaded
+    if (!hasInitialFit.current && markers.length > 0) {
       const bounds = new maplibregl.LngLatBounds();
       markers.forEach(m => bounds.extend([m.longitude, m.latitude]));
-      mapRef.current.fitBounds(bounds, { padding: 100, maxZoom: 17 });
+      map.fitBounds(bounds, { padding: 100, maxZoom: 17, animate: false });
+      hasInitialFit.current = true;
     }
-  }, [isMapLoaded]);
+  }, [isMapLoaded, markers, canEdit, onMarkerClick, onUpdatePosition]);
+
+  const isLoading = !isMapLoaded || isDataLoading;
+
+  // Trigger animation complete when loading finishes
+  useEffect(() => {
+    if (!isLoading && onAnimationComplete) {
+      onAnimationComplete();
+    }
+  }, [isLoading, onAnimationComplete]);
 
   return (
     <div className="relative w-full h-full">
       <div ref={containerRef} className="w-full h-full bg-gray-900" />
       
       <AnimatePresence>
-        {!isMapLoaded && (
+        {isLoading && (
           <motion.div 
             initial={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            transition={{ duration: 1, ease: "easeInOut" }}
+            transition={{ duration: 0.8, ease: "easeInOut" }}
             className="absolute inset-0 z-50 flex flex-col items-center justify-center bg-gray-900"
           >
             <div className="flex flex-col items-center gap-6">
@@ -273,6 +281,7 @@ export const GardenMap: React.FC = () => {
   const [isConnected, setIsConnected] = useState(false);
   const [isAuthenticating, setIsAuthenticating] = useState(true);
   const [showWelcome, setShowWelcome] = useState(false);
+  const [isDataLoading, setIsDataLoading] = useState(true);
   const mapRef = useRef<maplibregl.Map | null>(null);
 
   // Handle Anonymous Auth
@@ -301,6 +310,7 @@ export const GardenMap: React.FC = () => {
       const newMarkers = snapshot.docs.map(doc => doc.data() as PlantMarker);
       setMarkers(newMarkers);
       setIsConnected(true);
+      setIsDataLoading(false);
       
       // Sync selected marker if it exists
       if (selectedMarker) {
@@ -311,6 +321,7 @@ export const GardenMap: React.FC = () => {
       }
     }, (error) => {
       setIsConnected(false);
+      setIsDataLoading(false);
       handleFirestoreError(error, OperationType.LIST, 'markers');
     });
 
@@ -419,6 +430,7 @@ export const GardenMap: React.FC = () => {
         deleteMarker={deleteMarker}
         mapRef={mapRef}
         canEdit={canEdit}
+        isDataLoading={isDataLoading}
         onAnimationComplete={() => {
           if (!localStorage.getItem('welcome_shown')) {
             setShowWelcome(true);
