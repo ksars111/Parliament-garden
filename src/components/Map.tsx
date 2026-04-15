@@ -96,12 +96,13 @@ const MapComponent: React.FC<MapComponentProps> = ({
             type: 'raster',
             source: 'google-satellite',
             minzoom: 0,
-            maxzoom: 22
+            maxzoom: 24
           }
         ]
       },
       center: INITIAL_CENTER,
       zoom: INITIAL_ZOOM,
+      maxZoom: 24,
       maxBounds: MAX_BOUNDS,
       pitch: 45, // Slight tilt like Felt
     });
