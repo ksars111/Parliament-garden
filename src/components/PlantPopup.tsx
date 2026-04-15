@@ -19,8 +19,10 @@ export const PlantPopup: React.FC<PlantPopupProps> = ({ marker, onSave, onDelete
   const [isExpanded, setIsExpanded] = useState(false);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isResizing, setIsResizing] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   const resizeImage = (file: File): Promise<string> => {
     return new Promise((resolve, reject) => {
@@ -83,15 +85,44 @@ export const PlantPopup: React.FC<PlantPopupProps> = ({ marker, onSave, onDelete
     setType(marker.type);
   }, [marker]);
 
+  // Auto-save effect
+  React.useEffect(() => {
+    if (!canEdit) return;
+
+    // Skip if values haven't changed from the prop to avoid loops
+    if (
+      name === marker.name &&
+      description === marker.description &&
+      imageUrl === marker.imageUrl &&
+      type === marker.type
+    ) {
+      setIsSaving(false);
+      return;
+    }
+
+    setIsSaving(true);
+
+    if (saveTimeoutRef.current) {
+      clearTimeout(saveTimeoutRef.current);
+    }
+
+    saveTimeoutRef.current = setTimeout(() => {
+      onSave({ ...marker, name, description, imageUrl, type });
+      setIsSaving(false);
+    }, 1000); // 1 second debounce
+
+    return () => {
+      if (saveTimeoutRef.current) {
+        clearTimeout(saveTimeoutRef.current);
+      }
+    };
+  }, [name, description, imageUrl, type, marker, onSave, canEdit]);
+
   const TRUNCATE_LIMIT = 150;
   const shouldTruncate = description.length > TRUNCATE_LIMIT;
   const displayDescription = (shouldTruncate && !isExpanded) 
     ? `${description.slice(0, TRUNCATE_LIMIT)}...` 
     : description;
-
-  const handleSave = () => {
-    onSave({ ...marker, name, description, imageUrl, type });
-  };
 
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -239,7 +270,7 @@ export const PlantPopup: React.FC<PlantPopupProps> = ({ marker, onSave, onDelete
                   />
                 </div>
               </div>
-              <div className="flex gap-2 pt-2">
+              <div className="flex items-center justify-between pt-2">
                 <button
                   onClick={() => onDelete(marker.id)}
                   className="p-2 bg-red-50 hover:bg-red-100 text-red-500 rounded-lg transition-colors"
@@ -247,19 +278,28 @@ export const PlantPopup: React.FC<PlantPopupProps> = ({ marker, onSave, onDelete
                 >
                   <Trash2 size={18} />
                 </button>
-                <button
-                  onClick={handleSave}
-                  className="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white py-2 rounded-lg text-sm font-medium flex items-center justify-center gap-2 transition-colors"
-                >
-                  <Save size={16} />
-                  Save Changes
-                </button>
-                <button
-                  onClick={onClose}
-                  className="px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-600 rounded-lg text-sm font-medium transition-colors"
-                >
-                  Cancel
-                </button>
+                
+                <div className="flex items-center gap-2">
+                  <AnimatePresence>
+                    {isSaving && (
+                      <motion.div
+                        initial={{ opacity: 0, x: 10 }}
+                        animate={{ opacity: 1, x: 0 }}
+                        exit={{ opacity: 0, x: 10 }}
+                        className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-widest text-emerald-600"
+                      >
+                        <div className="w-1.5 h-1.5 bg-emerald-500 rounded-full animate-pulse" />
+                        Saving...
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
+                  <button
+                    onClick={onClose}
+                    className="px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-600 rounded-lg text-sm font-medium transition-colors"
+                  >
+                    Done
+                  </button>
+                </div>
               </div>
             </div>
           ) : (

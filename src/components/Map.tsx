@@ -23,6 +23,14 @@ import {
 const INITIAL_CENTER: [number, number] = [144.9742, -37.8108];
 const INITIAL_ZOOM = 17;
 
+// 1 square km boundary around the center
+const BOUNDS_OFFSET_LAT = 0.0045; // ~500m
+const BOUNDS_OFFSET_LNG = 0.0057; // ~500m at this latitude
+const MAX_BOUNDS: maplibregl.LngLatBoundsLike = [
+  [INITIAL_CENTER[0] - BOUNDS_OFFSET_LNG, INITIAL_CENTER[1] - BOUNDS_OFFSET_LAT], // SW
+  [INITIAL_CENTER[0] + BOUNDS_OFFSET_LNG, INITIAL_CENTER[1] + BOUNDS_OFFSET_LAT]  // NE
+];
+
 interface MapComponentProps {
   markers: PlantMarker[];
   onMarkerClick: (marker: PlantMarker) => void;
@@ -82,6 +90,7 @@ const MapComponent: React.FC<MapComponentProps> = ({
       },
       center: INITIAL_CENTER,
       zoom: INITIAL_ZOOM,
+      maxBounds: MAX_BOUNDS,
       pitch: 45, // Slight tilt like Felt
     });
 
@@ -381,7 +390,7 @@ export const GardenMap: React.FC = () => {
     });
   };
 
-  const updateMarker = async (updated: PlantMarker) => {
+  const updateMarker = useCallback(async (updated: PlantMarker) => {
     if (!canEdit || !auth.currentUser) return;
     try {
       console.log("Updating marker:", updated.id);
@@ -393,9 +402,9 @@ export const GardenMap: React.FC = () => {
       setSaveError("Failed to update. Check your connection.");
       handleFirestoreError(e, OperationType.WRITE, `markers/${updated.id}`);
     }
-  };
+  }, [canEdit]);
 
-  const updatePosition = async (updated: PlantMarker) => {
+  const updatePosition = useCallback(async (updated: PlantMarker) => {
     if (!canEdit || !auth.currentUser) return;
     try {
       await setDoc(doc(db, 'markers', updated.id), updated, { merge: true });
@@ -404,9 +413,9 @@ export const GardenMap: React.FC = () => {
       setSaveError("Failed to move marker.");
       handleFirestoreError(e, OperationType.WRITE, `markers/${updated.id}`);
     }
-  };
+  }, [canEdit]);
 
-  const deleteMarker = async (id: string) => {
+  const deleteMarker = useCallback(async (id: string) => {
     if (!canEdit || !auth.currentUser) return;
     
     try {
@@ -417,7 +426,7 @@ export const GardenMap: React.FC = () => {
       setSaveError("Failed to delete marker.");
       handleFirestoreError(e, OperationType.DELETE, `markers/${id}`);
     }
-  };
+  }, [canEdit]);
 
   return (
     <div className="relative w-full h-screen bg-gray-900 overflow-hidden">
