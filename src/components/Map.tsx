@@ -62,6 +62,18 @@ const MapComponent: React.FC<MapComponentProps> = ({
   const markersLayerRef = useRef<Record<string, maplibregl.Marker>>({});
   const hasInitialFit = useRef(false);
 
+  const updateMarkerZIndices = useCallback(() => {
+    if (!mapRef.current) return;
+    const map = mapRef.current;
+    Object.values(markersLayerRef.current).forEach((marker) => {
+      const lngLat = marker.getLngLat();
+      const point = map.project(lngLat);
+      // Higher Y (bottom of screen) = closer to camera = higher z-index
+      // We use Math.round to ensure it's an integer
+      marker.getElement().style.zIndex = Math.round(point.y).toString();
+    });
+  }, [mapRef]);
+
   // Initialize Map
   useEffect(() => {
     if (!containerRef.current || mapRef.current) return;
@@ -99,11 +111,16 @@ const MapComponent: React.FC<MapComponentProps> = ({
     map.on('load', () => {
       setIsMapLoaded(true);
       setZoomLevel(map.getZoom());
+      updateMarkerZIndices();
     });
 
     map.on('zoom', () => {
       setZoomLevel(map.getZoom());
     });
+
+    map.on('move', updateMarkerZIndices);
+    map.on('rotate', updateMarkerZIndices);
+    map.on('pitch', updateMarkerZIndices);
 
     map.on('click', (e) => {
       // Close popup when clicking the map
@@ -141,7 +158,7 @@ const MapComponent: React.FC<MapComponentProps> = ({
         existingMarker.setLngLat([marker.longitude, marker.latitude]);
         existingMarker.setDraggable(canEdit);
         
-        // Update visual style if type or image changed
+        // Visual style updates...
         const el = existingMarker.getElement();
         const inner = el.querySelector('div');
         if (inner) {
@@ -202,8 +219,13 @@ const MapComponent: React.FC<MapComponentProps> = ({
         });
 
         // Drag handlers
+        newMarker.on('drag', () => {
+          updateMarkerZIndices();
+        });
+
         newMarker.on('dragend', () => {
           const lngLat = newMarker.getLngLat();
+          updateMarkerZIndices();
           onUpdatePosition({
             ...marker,
             longitude: lngLat.lng,
@@ -214,6 +236,9 @@ const MapComponent: React.FC<MapComponentProps> = ({
         markersLayerRef.current[marker.id] = newMarker;
       }
     });
+
+    // Update z-indices after sync
+    updateMarkerZIndices();
 
     // Initial fit bounds when markers are first loaded
     if (!hasInitialFit.current && markers.length > 0) {
@@ -266,7 +291,7 @@ const MapComponent: React.FC<MapComponentProps> = ({
       </AnimatePresence>
 
       {/* Zoom Level Indicator */}
-      <div className="absolute bottom-6 left-6 z-10 flex flex-col gap-2 pointer-events-none">
+      <div className="absolute bottom-6 left-6 z-[2000] flex flex-col gap-2 pointer-events-none">
         <div className="bg-black/40 backdrop-blur-md border border-white/10 px-3 py-1.5 rounded-full flex items-center gap-2 shadow-lg">
           <div className="w-1.5 h-1.5 bg-emerald-500 rounded-full animate-pulse" />
           <span className="text-[10px] font-mono font-medium text-white/80 uppercase tracking-widest">
@@ -450,7 +475,7 @@ export const GardenMap: React.FC = () => {
       {/* Welcome Popup */}
       <AnimatePresence>
         {showWelcome && (
-          <div className="absolute inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-md">
+          <div className="absolute inset-0 z-[9000] flex items-center justify-center p-4 bg-black/60 backdrop-blur-md">
             <motion.div
               initial={{ opacity: 0, scale: 0.9, y: 20 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}
@@ -506,7 +531,7 @@ export const GardenMap: React.FC = () => {
       </AnimatePresence>
 
       {/* Status & Controls Rail */}
-      <div className="absolute top-0 left-0 z-10 flex flex-col gap-4 p-4">
+      <div className="absolute top-0 left-0 z-[2000] flex flex-col gap-4 p-4">
         {authError && (
           <div className="p-2 bg-red-500/20 backdrop-blur-md border border-red-500/30 rounded-lg text-red-200 text-[10px] max-w-[150px] flex items-start gap-2">
             <AlertCircle size={14} className="shrink-0 mt-0.5" />
@@ -553,7 +578,7 @@ export const GardenMap: React.FC = () => {
       {/* Unlock Confirmation Popup */}
       <AnimatePresence>
         {showUnlockConfirm && (
-          <div className="absolute inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm">
+          <div className="absolute inset-0 z-[9000] flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm">
             <motion.div 
               initial={{ opacity: 0, scale: 0.9, y: 20 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}
@@ -589,7 +614,7 @@ export const GardenMap: React.FC = () => {
       {/* Popup Overlay */}
       <AnimatePresence mode="wait">
         {selectedMarker && (
-          <div className="absolute inset-y-0 right-0 z-40 pointer-events-none flex items-center justify-end p-6 md:p-12">
+          <div className="absolute inset-y-0 right-0 z-[5000] pointer-events-none flex items-center justify-end p-6 md:p-12">
             <div className="pointer-events-auto">
               <PlantPopup
                 key={selectedMarker.id}
