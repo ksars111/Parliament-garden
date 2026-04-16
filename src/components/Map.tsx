@@ -41,6 +41,7 @@ interface MapComponentProps {
   mapRef: React.MutableRefObject<maplibregl.Map | null>;
   canEdit?: boolean;
   onAnimationComplete?: () => void;
+  onMapLoad?: (loaded: boolean) => void;
   isDataLoading?: boolean;
 }
 
@@ -54,6 +55,7 @@ const MapComponent: React.FC<MapComponentProps> = ({
   mapRef,
   canEdit = false,
   onAnimationComplete,
+  onMapLoad,
   isDataLoading = false
 }) => {
   const containerRef = useRef<HTMLDivElement>(null);
@@ -130,6 +132,7 @@ const MapComponent: React.FC<MapComponentProps> = ({
 
     map.on('load', () => {
       setIsMapLoaded(true);
+      if (onMapLoad) onMapLoad(true);
       const zoom = map.getZoom();
       setShowLabels(zoom > 20.5);
       setDisplayZoom(zoom);
@@ -318,34 +321,6 @@ const MapComponent: React.FC<MapComponentProps> = ({
         }
       `}</style>
 
-      <AnimatePresence>
-        {isLoading && (
-          <motion.div 
-            initial={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            transition={{ duration: 0.8, ease: "easeInOut" }}
-            className="absolute inset-0 z-50 flex flex-col items-center justify-center bg-gray-900"
-          >
-            <div className="flex flex-col items-center gap-6">
-              <div className="relative">
-                <div className="w-16 h-16 border-t-2 border-emerald-500 rounded-full animate-spin" />
-                <div className="absolute inset-0 flex items-center justify-center">
-                  <Leaf size={24} className="text-emerald-500 animate-pulse" />
-                </div>
-              </div>
-              <div className="flex items-baseline gap-1">
-                <span className="text-white/60 font-medium tracking-widest uppercase text-xs">Loading Map</span>
-                <div className="flex gap-1">
-                  <span className="w-1 h-1 bg-emerald-500 rounded-full animate-dot-1" />
-                  <span className="w-1 h-1 bg-emerald-500 rounded-full animate-dot-2" />
-                  <span className="w-1 h-1 bg-emerald-500 rounded-full animate-dot-3" />
-                </div>
-              </div>
-            </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
-
       {/* Zoom Level Indicator */}
       <div className="absolute bottom-6 left-6 z-[2000] flex flex-col gap-2 pointer-events-none">
         <div className="bg-black/40 backdrop-blur-md border border-white/10 px-3 py-1.5 rounded-full flex items-center gap-2 shadow-lg">
@@ -369,6 +344,7 @@ export const GardenMap: React.FC = () => {
   const [authError, setAuthError] = useState<string | null>(null);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [isConnected, setIsConnected] = useState(false);
+  const [isMapReady, setIsMapReady] = useState(false);
   const [isAuthenticating, setIsAuthenticating] = useState(true);
   const [showWelcome, setShowWelcome] = useState(false);
   const [showInstructions, setShowInstructions] = useState(false);
@@ -431,6 +407,8 @@ export const GardenMap: React.FC = () => {
   };
 
   const canEdit = isUnlocked;
+
+  const isActuallyLoading = !isMapReady || isDataLoading;
 
   const onMapClick = useCallback(async (lngLat: { lat: number; lng: number }) => {
     if (!canEdit || !auth.currentUser) {
@@ -544,6 +522,7 @@ export const GardenMap: React.FC = () => {
         mapRef={mapRef}
         canEdit={canEdit}
         isDataLoading={isDataLoading}
+        onMapLoad={setIsMapReady}
         onAnimationComplete={() => {
           if (!localStorage.getItem('welcome_shown')) {
             setShowWelcome(true);
@@ -775,6 +754,35 @@ export const GardenMap: React.FC = () => {
               </div>
             </motion.div>
           </div>
+        )}
+      </AnimatePresence>
+
+      {/* Global Loading Screen */}
+      <AnimatePresence>
+        {isActuallyLoading && (
+          <motion.div 
+            initial={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.8, ease: "easeInOut" }}
+            className="absolute inset-0 z-[10000] flex flex-col items-center justify-center bg-gray-900"
+          >
+            <div className="flex flex-col items-center gap-6">
+              <div className="relative">
+                <div className="w-16 h-16 border-t-2 border-emerald-500 rounded-full animate-spin" />
+                <div className="absolute inset-0 flex items-center justify-center">
+                  <Leaf size={24} className="text-emerald-500 animate-pulse" />
+                </div>
+              </div>
+              <div className="flex items-baseline gap-1">
+                <span className="text-white/60 font-medium tracking-widest uppercase text-xs">Loading Map</span>
+                <div className="flex gap-1">
+                  <span className="w-1 h-1 bg-emerald-500 rounded-full animate-dot-1" />
+                  <span className="w-1 h-1 bg-emerald-500 rounded-full animate-dot-2" />
+                  <span className="w-1 h-1 bg-emerald-500 rounded-full animate-dot-3" />
+                </div>
+              </div>
+            </div>
+          </motion.div>
         )}
       </AnimatePresence>
 
