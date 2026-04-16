@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { X, Save, Trash2, Camera, Upload, Maximize2, ChevronLeft, ChevronRight, Plus as PlusIcon, Tag } from 'lucide-react';
+import { X, Save, Trash2, Camera, Upload, Maximize2, ChevronLeft, ChevronRight, Plus as PlusIcon, Tag, GripVertical } from 'lucide-react';
 import { PlantMarker, PlantImage } from '../types';
-import { motion, AnimatePresence } from 'motion/react';
+import { motion, AnimatePresence, Reorder } from 'motion/react';
 
 interface PlantPopupProps {
   marker: PlantMarker;
@@ -170,6 +170,20 @@ export const PlantPopup: React.FC<PlantPopupProps> = ({ marker, onSave, onDelete
     setCurrentImageIndex((prev) => (prev - 1 + allImages.length) % allImages.length);
   };
 
+  const handleReorder = (newOrder: PlantImage[]) => {
+    if (newOrder.length === 0) {
+      setImageUrl('');
+      setImageLabel('');
+      setImages([]);
+      return;
+    }
+    
+    const hero = newOrder[0];
+    setImageUrl(hero.url);
+    setImageLabel(hero.label || '');
+    setImages(newOrder.slice(1));
+  };
+
   return (
     <>
       <motion.div
@@ -272,7 +286,7 @@ export const PlantPopup: React.FC<PlantPopupProps> = ({ marker, onSave, onDelete
                 <div className="flex gap-2">
                   <button
                     onClick={() => setType('plant')}
-                    className={`flex-1 py-2 rounded-lg text-sm font-medium transition-all ${type === 'plant' ? 'bg-emerald-800 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}
+                    className={`flex-1 py-2 rounded-lg text-sm font-medium transition-all ${type === 'plant' ? 'bg-lime-500 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}
                   >
                     Plant
                   </button>
@@ -305,12 +319,32 @@ export const PlantPopup: React.FC<PlantPopupProps> = ({ marker, onSave, onDelete
                 />
               </div>
               <div>
-                <label className="text-[10px] font-bold uppercase tracking-wider text-gray-400 mb-1 block">Images & Labels</label>
+                <label className="text-[10px] font-bold uppercase tracking-wider text-gray-400 mb-1 block">Images & Labels (Drag to reorder)</label>
                 <div className="space-y-3">
-                  <div className="flex gap-3 overflow-x-auto pb-2 custom-scrollbar">
+                  <Reorder.Group 
+                    axis="x" 
+                    values={allImages} 
+                    onReorder={handleReorder}
+                    className="flex gap-3 overflow-x-auto pb-2 custom-scrollbar"
+                  >
                     {allImages.map((img, idx) => (
-                      <div key={idx} className="relative shrink-0 w-24 h-24 rounded-xl overflow-hidden border border-gray-200 group flex flex-col">
-                        <img src={img.url} alt="" className="w-full h-full object-cover" />
+                      <Reorder.Item 
+                        key={img.url} 
+                        value={img}
+                        className="relative shrink-0 w-24 h-24 rounded-xl overflow-hidden border border-gray-200 group flex flex-col cursor-grab active:cursor-grabbing"
+                      >
+                        <img src={img.url} alt="" className="w-full h-full object-cover pointer-events-none" />
+                        
+                        <div className="absolute top-1 left-1 p-1 bg-black/40 backdrop-blur-md rounded text-white opacity-0 group-hover:opacity-100 transition-opacity">
+                          <GripVertical size={10} />
+                        </div>
+
+                        {idx === 0 && (
+                          <div className="absolute top-1 right-1 px-1.5 py-0.5 bg-emerald-500 text-white text-[8px] font-bold uppercase rounded shadow-sm">
+                            Main
+                          </div>
+                        )}
+
                         <div className="absolute inset-x-0 bottom-0 p-1.5 bg-black/60 backdrop-blur-sm">
                           <input
                             type="text"
@@ -328,7 +362,8 @@ export const PlantPopup: React.FC<PlantPopupProps> = ({ marker, onSave, onDelete
                           />
                         </div>
                         <button
-                          onClick={() => {
+                          onClick={(e) => {
+                            e.stopPropagation();
                             if (idx === 0) {
                               setImageUrl(images[0]?.url || '');
                               setImageLabel(images[0]?.label || '');
@@ -337,11 +372,11 @@ export const PlantPopup: React.FC<PlantPopupProps> = ({ marker, onSave, onDelete
                               setImages(prev => prev.filter((_, i) => i !== idx - 1));
                             }
                           }}
-                          className="absolute top-1 right-1 p-1 bg-red-500/80 text-white rounded-full opacity-0 group-hover:opacity-100 transition-opacity"
+                          className="absolute bottom-1 right-1 p-1 bg-red-500/80 text-white rounded-full opacity-0 group-hover:opacity-100 transition-opacity"
                         >
                           <Trash2 size={10} />
                         </button>
-                      </div>
+                      </Reorder.Item>
                     ))}
                     <button
                       onClick={() => fileInputRef.current?.click()}
@@ -350,7 +385,7 @@ export const PlantPopup: React.FC<PlantPopupProps> = ({ marker, onSave, onDelete
                       <PlusIcon size={24} />
                       <span className="text-[8px] font-bold uppercase mt-1">Add Photo</span>
                     </button>
-                  </div>
+                  </Reorder.Group>
                   <input
                     ref={fileInputRef}
                     type="file"
@@ -396,7 +431,7 @@ export const PlantPopup: React.FC<PlantPopupProps> = ({ marker, onSave, onDelete
             <div className="space-y-3">
               <div className="flex items-center justify-between">
                 <h3 className="text-lg font-semibold text-gray-900 leading-tight">{name || 'Unnamed Plant'}</h3>
-                <span className={`text-[10px] font-bold uppercase tracking-widest px-2 py-1 rounded-md ${type === 'tree' ? 'bg-emerald-100 text-emerald-600' : 'bg-emerald-800 text-white'}`}>
+                <span className={`text-[10px] font-bold uppercase tracking-widest px-2 py-1 rounded-md ${type === 'tree' ? 'bg-emerald-100 text-emerald-600' : 'bg-lime-100 text-lime-600'}`}>
                   {type}
                 </span>
               </div>

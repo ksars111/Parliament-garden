@@ -199,7 +199,7 @@ const MapComponent: React.FC<MapComponentProps> = ({
         }
 
         if (inner) {
-          inner.className = `w-10 h-10 ${marker.type === 'tree' ? 'bg-emerald-400' : 'bg-emerald-800'} rounded-full flex items-center justify-center shadow-lg border-2 border-white/40 overflow-hidden transition-transform duration-200 hover:scale-110 active:scale-95`;
+          inner.className = `w-10 h-10 ${marker.type === 'tree' ? 'bg-emerald-400' : 'bg-lime-400'} rounded-full flex items-center justify-center shadow-lg border-2 border-white/40 overflow-hidden transition-transform duration-200 hover:scale-110 active:scale-95`;
           
           // Update image or icon
           const img = inner.querySelector('img');
@@ -228,7 +228,7 @@ const MapComponent: React.FC<MapComponentProps> = ({
         
         // Inner wrapper for visual style and hover effects
         const inner = document.createElement('div');
-        inner.className = `w-10 h-10 ${marker.type === 'tree' ? 'bg-emerald-400' : 'bg-emerald-800'} rounded-full flex items-center justify-center shadow-lg border-2 border-white/40 overflow-hidden transition-transform duration-200 hover:scale-110 active:scale-95`;
+        inner.className = `w-10 h-10 ${marker.type === 'tree' ? 'bg-emerald-400' : 'bg-lime-400'} rounded-full flex items-center justify-center shadow-lg border-2 border-white/40 overflow-hidden transition-transform duration-200 hover:scale-110 active:scale-95`;
         el.appendChild(inner);
         
         // Add label
@@ -370,6 +370,7 @@ export const GardenMap: React.FC = () => {
   const [isConnected, setIsConnected] = useState(false);
   const [isAuthenticating, setIsAuthenticating] = useState(true);
   const [showWelcome, setShowWelcome] = useState(false);
+  const [showInstructions, setShowInstructions] = useState(false);
   const [isDataLoading, setIsDataLoading] = useState(true);
   const mapRef = useRef<maplibregl.Map | null>(null);
 
@@ -614,21 +615,91 @@ export const GardenMap: React.FC = () => {
             <button 
               onClick={addMarkerAtCenter}
               disabled={!isConnected}
-              className={`w-10 h-10 ${isConnected ? 'bg-emerald-500 hover:bg-emerald-600' : 'bg-gray-700 cursor-not-allowed'} backdrop-blur-md border border-emerald-500/30 rounded-full flex items-center justify-center text-white transition-all active:scale-95 shadow-xl`}
-              title="Add Tree"
+              className={`h-10 px-4 ${isConnected ? 'bg-emerald-500 hover:bg-emerald-600' : 'bg-gray-700 cursor-not-allowed'} backdrop-blur-md border border-emerald-500/30 rounded-full flex items-center gap-2 text-white transition-all active:scale-95 shadow-xl`}
             >
-              <Plus size={20} strokeWidth={1.5} />
+              <Plus size={18} strokeWidth={2} />
+              <span className="text-[10px] font-bold uppercase tracking-wider">Add New Tree</span>
             </button>
             <button 
               onClick={handleLockEditing}
-              className="w-10 h-10 bg-white/5 hover:bg-white/10 backdrop-blur-md border border-white/10 rounded-full flex items-center justify-center text-white/60 hover:text-white transition-all active:scale-95 shadow-lg"
-              title="Lock Editing"
+              className="h-10 px-4 bg-white/5 hover:bg-white/10 backdrop-blur-md border border-white/10 rounded-full flex items-center gap-2 text-white/60 hover:text-white transition-all active:scale-95 shadow-lg"
             >
               <ShieldCheck size={18} strokeWidth={1.5} />
+              <span className="text-[10px] font-bold uppercase tracking-wider">Return to View</span>
+            </button>
+            <button 
+              onClick={() => setShowInstructions(true)}
+              className="h-10 px-4 bg-white/5 hover:bg-white/10 backdrop-blur-md border border-white/10 rounded-full flex items-center gap-2 text-white/60 hover:text-white transition-all active:scale-95 shadow-lg"
+            >
+              <Info size={18} strokeWidth={1.5} />
+              <span className="text-[10px] font-bold uppercase tracking-wider">Instructions</span>
             </button>
           </div>
         )}
       </div>
+
+      {/* Instructions Popup */}
+      <AnimatePresence>
+        {showInstructions && (
+          <div className="absolute inset-0 z-[9000] flex items-center justify-center p-4 bg-black/60 backdrop-blur-md">
+            <motion.div
+              initial={{ opacity: 0, scale: 0.9, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.9, y: 20 }}
+              className="bg-zinc-900 border border-white/10 p-8 rounded-[32px] shadow-2xl max-w-md w-full relative overflow-hidden"
+            >
+              <div className="absolute -top-24 -right-24 w-48 h-48 bg-emerald-500/10 rounded-full blur-3xl pointer-events-none" />
+              
+              <div className="flex items-center justify-between mb-6">
+                <h2 className="text-2xl font-bold text-white tracking-tight">How to Edit</h2>
+                <button 
+                  onClick={() => setShowInstructions(false)}
+                  className="p-2 hover:bg-white/5 rounded-full text-white/40 hover:text-white transition-colors"
+                >
+                  <X size={20} />
+                </button>
+              </div>
+              
+              <div className="space-y-4 mb-8">
+                <div className="p-4 bg-white/5 rounded-2xl border border-white/5">
+                  <h4 className="text-emerald-400 font-bold text-[10px] uppercase tracking-widest mb-2">Adding Plants</h4>
+                  <p className="text-gray-300 text-xs leading-relaxed">
+                    Click the <span className="text-emerald-400 font-bold">"Add New Tree"</span> button to drop a marker at the center of your screen.
+                  </p>
+                </div>
+
+                <div className="p-4 bg-white/5 rounded-2xl border border-white/5">
+                  <h4 className="text-emerald-400 font-bold text-[10px] uppercase tracking-widest mb-2">Moving Markers</h4>
+                  <p className="text-gray-300 text-xs leading-relaxed">
+                    In edit mode, you can <span className="text-emerald-400 font-bold">click and drag</span> any marker on the map to reposition it.
+                  </p>
+                </div>
+
+                <div className="p-4 bg-white/5 rounded-2xl border border-white/5">
+                  <h4 className="text-emerald-400 font-bold text-[10px] uppercase tracking-widest mb-2">Editing Details</h4>
+                  <p className="text-gray-300 text-xs leading-relaxed">
+                    Click a marker to open its popup. You can change the name, description, and upload up to 5 photos.
+                  </p>
+                </div>
+
+                <div className="p-4 bg-white/5 rounded-2xl border border-white/5">
+                  <h4 className="text-emerald-400 font-bold text-[10px] uppercase tracking-widest mb-2">Photo Management</h4>
+                  <p className="text-gray-300 text-xs leading-relaxed">
+                    <span className="text-emerald-400 font-bold">Drag photos</span> in the edit view to reorder them. The first photo becomes the "Main" hero image.
+                  </p>
+                </div>
+              </div>
+
+              <button
+                onClick={() => setShowInstructions(false)}
+                className="w-full py-4 bg-emerald-500 hover:bg-emerald-600 text-white rounded-2xl font-semibold transition-all shadow-lg active:scale-[0.98]"
+              >
+                Got it, thanks!
+              </button>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
 
       {/* Unlock Confirmation Popup */}
       <AnimatePresence>
