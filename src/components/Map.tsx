@@ -661,23 +661,6 @@ export const GardenMap: React.FC = () => {
         )}
       </div>
 
-      {/* Bottom Right Controls */}
-      <div className="absolute bottom-6 right-6 z-[2000] flex flex-col gap-3">
-        <button 
-          onClick={toggleSnapView}
-          className="w-12 h-12 bg-zinc-900/80 hover:bg-zinc-800 backdrop-blur-md border border-white/10 rounded-2xl flex items-center justify-center text-white/80 hover:text-white transition-all active:scale-95 shadow-2xl group"
-          title="Toggle Top-down / Tilt View"
-        >
-          <Rotate3d size={22} className="group-hover:scale-110 transition-transform" />
-        </button>
-        <button 
-          onClick={resetView}
-          className="w-12 h-12 bg-zinc-900/80 hover:bg-zinc-800 backdrop-blur-md border border-white/10 rounded-2xl flex items-center justify-center text-white/80 hover:text-white transition-all active:scale-95 shadow-2xl group"
-          title="Reset to Home View"
-        >
-          <Home size={22} className="group-hover:scale-110 transition-transform" />
-        </button>
-      </div>
 
       {/* Instructions Popup */}
       <AnimatePresence>
@@ -795,6 +778,28 @@ export const GardenMap: React.FC = () => {
           </div>
         )}
       </AnimatePresence>
+
+      {/* Bottom Right Controls - Moved to end and increased z-index for visibility */}
+      <div className="absolute bottom-8 right-8 z-[4500] flex flex-col gap-4">
+        <motion.button 
+          initial={{ opacity: 0, scale: 0.8 }}
+          animate={{ opacity: 1, scale: 1 }}
+          onClick={toggleSnapView}
+          className="w-14 h-14 bg-zinc-900/90 hover:bg-zinc-800 backdrop-blur-xl border border-white/20 rounded-2xl flex items-center justify-center text-white/90 hover:text-white transition-all active:scale-90 shadow-[0_20px_50px_rgba(0,0,0,0.5)] group"
+          title="Toggle Top-down / Tilt View"
+        >
+          <Rotate3d size={24} className="group-hover:scale-110 transition-transform" />
+        </motion.button>
+        <motion.button 
+          initial={{ opacity: 0, scale: 0.8 }}
+          animate={{ opacity: 1, scale: 1 }}
+          onClick={resetView}
+          className="w-14 h-14 bg-zinc-900/90 hover:bg-zinc-800 backdrop-blur-xl border border-white/20 rounded-2xl flex items-center justify-center text-white/90 hover:text-white transition-all active:scale-90 shadow-[0_20px_50px_rgba(0,0,0,0.5)] group"
+          title="Reset to Home View"
+        >
+          <Home size={24} className="group-hover:scale-110 transition-transform" />
+        </motion.button>
+      </div>
     </div>
   );
 };
