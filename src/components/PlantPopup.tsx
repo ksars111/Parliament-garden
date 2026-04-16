@@ -34,8 +34,8 @@ export const PlantPopup: React.FC<PlantPopupProps> = ({ marker, onSave, onDelete
         const img = new Image();
         img.onload = () => {
           const canvas = document.createElement('canvas');
-          const MAX_WIDTH = 1600;
-          const MAX_HEIGHT = 1600;
+          const MAX_WIDTH = 1024;
+          const MAX_HEIGHT = 1024;
           let width = img.width;
           let height = img.height;
 
@@ -61,12 +61,13 @@ export const PlantPopup: React.FC<PlantPopupProps> = ({ marker, onSave, onDelete
           
           ctx.drawImage(img, 0, 0, width, height);
           
-          // Start with high quality and reduce if needed to fit under 1MB
-          let quality = 0.8;
+          // Start with high quality and reduce if needed to fit under a safe limit
+          // Since we support up to 5 images, each should be around 150-180KB max
+          let quality = 0.7;
           let dataUrl = canvas.toDataURL('image/jpeg', quality);
           
-          // Firestore limit is 1MB, we target ~800KB for safety
-          while (dataUrl.length > 1000000 && quality > 0.1) {
+          // Target ~180KB per image (180,000 bytes)
+          while (dataUrl.length > 180000 && quality > 0.1) {
             quality -= 0.1;
             dataUrl = canvas.toDataURL('image/jpeg', quality);
           }
@@ -126,6 +127,11 @@ export const PlantPopup: React.FC<PlantPopupProps> = ({ marker, onSave, onDelete
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
+      if (allImages.length >= 5) {
+        setError("Maximum 5 photos allowed per plant.");
+        return;
+      }
+
       setIsResizing(true);
       setError(null);
       
