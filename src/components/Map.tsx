@@ -472,7 +472,12 @@ export const GardenMap: React.FC = () => {
     }, (error) => {
       setIsConnected(false);
       setIsDataLoading(false);
-      handleFirestoreError(error, OperationType.LIST, 'markers');
+      // Only log/throw if it's not a transient connection error
+      if (!error.message.includes('unavailable') && !error.message.includes('offline')) {
+        handleFirestoreError(error, OperationType.LIST, 'markers');
+      } else {
+        console.warn("Firestore sync paused: Connection unavailable.");
+      }
     });
 
     return () => unsubscribe();
@@ -505,6 +510,7 @@ export const GardenMap: React.FC = () => {
       name: 'New Tree',
       description: '',
       imageUrl: `https://picsum.photos/seed/${Math.random()}/400/300`,
+      images: [],
       createdAt: Date.now(),
       type: 'tree'
     };
