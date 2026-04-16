@@ -1,7 +1,7 @@
 import React, { useState, useCallback, useEffect, useRef } from 'react';
 import maplibregl from 'maplibre-gl';
 import 'maplibre-gl/dist/maplibre-gl.css';
-import { Leaf, Plus, Map as MapIcon, Info, X, ChevronRight, Pencil, ShieldCheck, AlertCircle, Layers, Home } from 'lucide-react';
+import { Leaf, Plus, Map as MapIcon, Info, List, Search, X, ChevronRight, Pencil, ShieldCheck, AlertCircle, Home, Rotate3d } from 'lucide-react';
 import { PlantMarker } from '../types';
 import { PlantPopup } from './PlantPopup';
 import { motion, AnimatePresence } from 'motion/react';
@@ -60,7 +60,6 @@ const MapComponent: React.FC<MapComponentProps> = ({
   const [isMapLoaded, setIsMapLoaded] = useState(false);
   const [showLabels, setShowLabels] = useState(INITIAL_ZOOM > 20.5);
   const [displayZoom, setDisplayZoom] = useState(INITIAL_ZOOM);
-  const [isAngled, setIsAngled] = useState(true);
   const markersLayerRef = useRef<Record<string, maplibregl.Marker>>({});
   const rafRef = useRef<number | null>(null);
   const hasInitialFit = useRef(false);
@@ -105,8 +104,7 @@ const MapComponent: React.FC<MapComponentProps> = ({
           'google-satellite': {
             type: 'raster',
             tiles: ['https://mt1.google.com/vt/lyrs=s&x={x}&y={y}&z={z}'],
-            tileSize: 256,
-            attribution: '© Google'
+            tileSize: 256
           }
         },
         layers: [
@@ -124,6 +122,8 @@ const MapComponent: React.FC<MapComponentProps> = ({
       maxZoom: 24,
       maxBounds: MAX_BOUNDS,
       pitch: 45, // Slight tilt like Felt
+      maxPitch: 85,
+      attributionControl: false,
     });
 
     mapRef.current = map;
@@ -151,10 +151,7 @@ const MapComponent: React.FC<MapComponentProps> = ({
 
     map.on('move', updateMarkerZIndices);
     map.on('rotate', updateMarkerZIndices);
-    map.on('pitch', (e) => {
-      setIsAngled(map.getPitch() > 0);
-      updateMarkerZIndices();
-    });
+    map.on('pitch', updateMarkerZIndices);
 
     map.on('click', (e) => {
       // Close popup when clicking the map
@@ -305,66 +302,10 @@ const MapComponent: React.FC<MapComponentProps> = ({
     }
   }, [isLoading, onAnimationComplete]);
 
-  const togglePitch = () => {
-    if (!mapRef.current) return;
-    const currentPitch = mapRef.current.getPitch();
-    const newPitch = currentPitch > 0 ? 0 : 45;
-    mapRef.current.easeTo({
-      pitch: newPitch,
-      duration: 800
-    });
-  };
-
-  const resetView = () => {
-    if (!mapRef.current || markers.length === 0) {
-      if (mapRef.current) {
-        mapRef.current.easeTo({
-          center: INITIAL_CENTER,
-          zoom: INITIAL_ZOOM,
-          pitch: 45,
-          bearing: 0,
-          duration: 1000
-        });
-      }
-      return;
-    }
-
-    const bounds = new maplibregl.LngLatBounds();
-    markers.forEach(m => bounds.extend([m.longitude, m.latitude]));
-    
-    mapRef.current.fitBounds(bounds, {
-      padding: 100,
-      maxZoom: 20,
-      duration: 1000,
-      pitch: 45
-    });
-  };
-
   return (
     <div className={`relative w-full h-full ${showLabels ? 'show-labels' : ''}`}>
       <div ref={containerRef} className="w-full h-full bg-gray-900" />
       
-      {/* Bottom Controls */}
-      <div className="absolute bottom-6 right-6 z-[2000] flex flex-col gap-3">
-        <button
-          onClick={togglePitch}
-          className="w-12 h-12 bg-black/40 backdrop-blur-md border border-white/10 rounded-2xl flex items-center justify-center text-white/80 hover:text-white hover:bg-black/60 transition-all shadow-xl pointer-events-auto group"
-          title={isAngled ? "Top-down View" : "Angled View"}
-        >
-          <Layers 
-            size={20} 
-            className={`transition-transform duration-500 ${isAngled ? 'rotate-0' : 'rotate-180'}`} 
-          />
-        </button>
-        <button
-          onClick={resetView}
-          className="w-12 h-12 bg-black/40 backdrop-blur-md border border-white/10 rounded-2xl flex items-center justify-center text-white/80 hover:text-white hover:bg-black/60 transition-all shadow-xl pointer-events-auto group"
-          title="Reset View"
-        >
-          <Home size={20} className="group-hover:scale-110 transition-transform" />
-        </button>
-      </div>
-
       <style>{`
         .marker-label {
           opacity: 0;
@@ -472,12 +413,7 @@ export const GardenMap: React.FC = () => {
     }, (error) => {
       setIsConnected(false);
       setIsDataLoading(false);
-      // Only log/throw if it's not a transient connection error
-      if (!error.message.includes('unavailable') && !error.message.includes('offline')) {
-        handleFirestoreError(error, OperationType.LIST, 'markers');
-      } else {
-        console.warn("Firestore sync paused: Connection unavailable.");
-      }
+      handleFirestoreError(error, OperationType.LIST, 'markers');
     });
 
     return () => unsubscribe();
@@ -510,7 +446,6 @@ export const GardenMap: React.FC = () => {
       name: 'New Tree',
       description: '',
       imageUrl: `https://picsum.photos/seed/${Math.random()}/400/300`,
-      images: [],
       createdAt: Date.now(),
       type: 'tree'
     };
@@ -574,6 +509,28 @@ export const GardenMap: React.FC = () => {
       handleFirestoreError(e, OperationType.DELETE, `markers/${id}`);
     }
   }, [canEdit]);
+
+  const resetView = () => {
+    if (!mapRef.current) return;
+    mapRef.current.flyTo({
+      center: INITIAL_CENTER,
+      zoom: INITIAL_ZOOM,
+      pitch: 45,
+      bearing: 0,
+      essential: true
+    });
+  };
+
+  const toggleSnapView = () => {
+    if (!mapRef.current) return;
+    const currentPitch = mapRef.current.getPitch();
+    const targetPitch = currentPitch > 10 ? 0 : 80;
+    mapRef.current.easeTo({
+      pitch: targetPitch,
+      duration: 800,
+      essential: true
+    });
+  };
 
   return (
     <div className="relative w-full h-screen bg-gray-900 overflow-hidden">
@@ -702,6 +659,24 @@ export const GardenMap: React.FC = () => {
             </button>
           </div>
         )}
+      </div>
+
+      {/* Bottom Right Controls */}
+      <div className="absolute bottom-6 right-6 z-[2000] flex flex-col gap-3">
+        <button 
+          onClick={toggleSnapView}
+          className="w-12 h-12 bg-zinc-900/80 hover:bg-zinc-800 backdrop-blur-md border border-white/10 rounded-2xl flex items-center justify-center text-white/80 hover:text-white transition-all active:scale-95 shadow-2xl group"
+          title="Toggle Top-down / Tilt View"
+        >
+          <Rotate3d size={22} className="group-hover:scale-110 transition-transform" />
+        </button>
+        <button 
+          onClick={resetView}
+          className="w-12 h-12 bg-zinc-900/80 hover:bg-zinc-800 backdrop-blur-md border border-white/10 rounded-2xl flex items-center justify-center text-white/80 hover:text-white transition-all active:scale-95 shadow-2xl group"
+          title="Reset to Home View"
+        >
+          <Home size={22} className="group-hover:scale-110 transition-transform" />
+        </button>
       </div>
 
       {/* Instructions Popup */}
