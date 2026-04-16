@@ -1,5 +1,15 @@
 @import "tailwindcss";
 
+@layer base {
+  html, body {
+    @apply h-full overflow-hidden overscroll-none;
+    height: 100vh;
+    height: 100svh;
+    position: fixed;
+    width: 100%;
+  }
+}
+
 @theme {
   --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
   --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;

@@ -348,6 +348,7 @@ export const GardenMap: React.FC = () => {
   const [isAuthenticating, setIsAuthenticating] = useState(true);
   const [showWelcome, setShowWelcome] = useState(false);
   const [showInstructions, setShowInstructions] = useState(false);
+  const [showLegend, setShowLegend] = useState(false);
   const [isDataLoading, setIsDataLoading] = useState(true);
   const mapRef = useRef<maplibregl.Map | null>(null);
 
@@ -510,8 +511,21 @@ export const GardenMap: React.FC = () => {
     });
   };
 
+  const zoomToMarker = (marker: PlantMarker) => {
+    if (!mapRef.current) return;
+    mapRef.current.flyTo({
+      center: [marker.longitude, marker.latitude],
+      zoom: 21,
+      pitch: 60,
+      essential: true
+    });
+    setShowLegend(false);
+  };
+
+  const sortedMarkers = [...markers].sort((a, b) => a.name.localeCompare(b.name));
+
   return (
-    <div className="relative w-full h-screen h-[100svh] bg-gray-900 overflow-hidden">
+    <div className="relative w-full h-[100svh] bg-gray-900 overflow-hidden overscroll-none touch-none">
       <MapComponent 
         markers={markers}
         onMarkerClick={setSelectedMarker}
@@ -640,6 +654,66 @@ export const GardenMap: React.FC = () => {
         )}
       </div>
 
+      {/* Legend Dropdown (Top Right) */}
+      <div className="absolute top-4 right-4 z-[2000] flex flex-col items-end gap-2">
+        <button 
+          onClick={() => setShowLegend(!showLegend)}
+          className={`h-10 px-4 backdrop-blur-md border rounded-full flex items-center gap-2 transition-all active:scale-95 shadow-xl ${
+            showLegend 
+              ? 'bg-emerald-500 border-emerald-400 text-white' 
+              : 'bg-zinc-900/80 border-white/10 text-white/60 hover:text-white hover:bg-zinc-800'
+          }`}
+        >
+          <List size={18} />
+          <span className="text-[10px] font-bold uppercase tracking-wider">Garden Legend</span>
+        </button>
+
+        <AnimatePresence>
+          {showLegend && (
+            <motion.div
+              initial={{ opacity: 0, y: -10, scale: 0.95 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ opacity: 0, y: -10, scale: 0.95 }}
+              className="w-64 max-h-[70vh] bg-zinc-900/90 backdrop-blur-xl border border-white/10 rounded-2xl shadow-2xl overflow-hidden flex flex-col"
+            >
+              <div className="p-4 border-b border-white/5 flex items-center justify-between">
+                <span className="text-[10px] font-bold uppercase tracking-widest text-emerald-500">Alphabetical List</span>
+                <span className="text-[10px] font-medium text-white/40">{markers.length} items</span>
+              </div>
+              
+              <div className="overflow-y-auto custom-scrollbar p-2">
+                {sortedMarkers.length === 0 ? (
+                  <div className="p-4 text-center text-white/30 text-xs italic">
+                    No plants added yet...
+                  </div>
+                ) : (
+                  <div className="space-y-1">
+                    {sortedMarkers.map((marker) => (
+                      <button
+                        key={marker.id}
+                        onClick={() => zoomToMarker(marker)}
+                        className="w-full text-left p-3 hover:bg-white/5 rounded-xl transition-colors group flex items-center gap-3"
+                      >
+                        <div className={`w-2 h-2 rounded-full shrink-0 ${marker.type === 'tree' ? 'bg-emerald-400 shadow-[0_0_8px_rgba(52,211,153,0.5)]' : 'bg-lime-400 shadow-[0_0_8px_rgba(163,230,53,0.5)]'}`} />
+                        <div className="flex-1 overflow-hidden">
+                          <div className="text-white text-xs font-medium truncate group-hover:text-emerald-400 transition-colors">
+                            {marker.name}
+                          </div>
+                          <div className="text-[10px] text-white/40 uppercase tracking-tighter">
+                            {marker.type}
+                          </div>
+                        </div>
+                        <ChevronRight size={14} className="text-white/20 group-hover:text-white group-hover:translate-x-0.5 transition-all" />
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+      </div>
+
       {/* Bottom Right Controls */}
       <div className="absolute bottom-8 right-6 md:bottom-10 md:right-10 z-[2000] flex flex-col gap-3 mb-[env(safe-area-inset-bottom)] mr-[env(safe-area-inset-right)]">
         <button 
@@ -764,7 +838,7 @@ export const GardenMap: React.FC = () => {
             initial={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             transition={{ duration: 0.8, ease: "easeInOut" }}
-            className="absolute inset-0 z-[10000] flex flex-col items-center justify-center bg-gray-900"
+            className="absolute inset-0 z-[10000] flex flex-col items-center justify-center bg-gray-900 overscroll-none touch-none"
           >
             <div className="flex flex-col items-center gap-6">
               <div className="relative">
