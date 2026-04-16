@@ -58,19 +58,37 @@ const MapComponent: React.FC<MapComponentProps> = ({
 }) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const [isMapLoaded, setIsMapLoaded] = useState(false);
-  const [zoomLevel, setZoomLevel] = useState(INITIAL_ZOOM);
+  const [showLabels, setShowLabels] = useState(INITIAL_ZOOM > 20.5);
+  const [displayZoom, setDisplayZoom] = useState(INITIAL_ZOOM);
   const markersLayerRef = useRef<Record<string, maplibregl.Marker>>({});
+  const rafRef = useRef<number | null>(null);
   const hasInitialFit = useRef(false);
 
   const updateMarkerZIndices = useCallback(() => {
     if (!mapRef.current) return;
-    const map = mapRef.current;
-    Object.values(markersLayerRef.current).forEach((marker) => {
-      const lngLat = marker.getLngLat();
-      const point = map.project(lngLat);
-      // Higher Y (bottom of screen) = closer to camera = higher z-index
-      // We use Math.round to ensure it's an integer
-      marker.getElement().style.zIndex = Math.round(point.y).toString();
+    
+    if (rafRef.current) cancelAnimationFrame(rafRef.current);
+    
+    rafRef.current = requestAnimationFrame(() => {
+      const map = mapRef.current;
+      if (!map) return;
+      
+      const bounds = map.getBounds();
+      
+      Object.values(markersLayerRef.current).forEach((marker) => {
+        const lngLat = marker.getLngLat();
+        
+        // Culling: Only update markers in or near viewport
+        if (!bounds.contains(lngLat)) {
+          marker.getElement().style.display = 'none';
+          return;
+        }
+        
+        marker.getElement().style.display = 'block';
+        const point = map.project(lngLat);
+        // Higher Y (bottom of screen) = closer to camera = higher z-index
+        marker.getElement().style.zIndex = Math.round(point.y).toString();
+      });
     });
   }, [mapRef]);
 
@@ -111,12 +129,23 @@ const MapComponent: React.FC<MapComponentProps> = ({
 
     map.on('load', () => {
       setIsMapLoaded(true);
-      setZoomLevel(map.getZoom());
+      const zoom = map.getZoom();
+      setShowLabels(zoom > 20.5);
+      setDisplayZoom(zoom);
       updateMarkerZIndices();
     });
 
     map.on('zoom', () => {
-      setZoomLevel(map.getZoom());
+      const zoom = map.getZoom();
+      
+      // Update labels state only on threshold crossing
+      setShowLabels(prev => {
+        const next = zoom > 20.5;
+        return prev === next ? prev : next;
+      });
+
+      // Update display zoom for UI (throttled implicitly by React state batching)
+      setDisplayZoom(zoom);
     });
 
     map.on('move', updateMarkerZIndices);
@@ -131,6 +160,7 @@ const MapComponent: React.FC<MapComponentProps> = ({
     });
 
     return () => {
+      if (rafRef.current) cancelAnimationFrame(rafRef.current);
       map.remove();
       mapRef.current = null;
     };
@@ -272,7 +302,7 @@ const MapComponent: React.FC<MapComponentProps> = ({
   }, [isLoading, onAnimationComplete]);
 
   return (
-    <div className={`relative w-full h-full ${zoomLevel > 20.5 ? 'show-labels' : ''}`}>
+    <div className={`relative w-full h-full ${showLabels ? 'show-labels' : ''}`}>
       <div ref={containerRef} className="w-full h-full bg-gray-900" />
       
       <style>{`
@@ -320,7 +350,7 @@ const MapComponent: React.FC<MapComponentProps> = ({
         <div className="bg-black/40 backdrop-blur-md border border-white/10 px-3 py-1.5 rounded-full flex items-center gap-2 shadow-lg">
           <div className="w-1.5 h-1.5 bg-emerald-500 rounded-full animate-pulse" />
           <span className="text-[10px] font-mono font-medium text-white/80 uppercase tracking-widest">
-            Zoom {zoomLevel.toFixed(1)}
+            Zoom {displayZoom.toFixed(1)}
           </span>
         </div>
       </div>

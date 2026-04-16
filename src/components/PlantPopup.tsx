@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { X, Save, Trash2, Camera, Upload, Maximize2, ChevronLeft, ChevronRight, Plus as PlusIcon } from 'lucide-react';
-import { PlantMarker } from '../types';
+import { X, Save, Trash2, Camera, Upload, Maximize2, ChevronLeft, ChevronRight, Plus as PlusIcon, Tag } from 'lucide-react';
+import { PlantMarker, PlantImage } from '../types';
 import { motion, AnimatePresence } from 'motion/react';
 
 interface PlantPopupProps {
@@ -15,7 +15,11 @@ export const PlantPopup: React.FC<PlantPopupProps> = ({ marker, onSave, onDelete
   const [name, setName] = useState(marker.name);
   const [description, setDescription] = useState(marker.description);
   const [imageUrl, setImageUrl] = useState(marker.imageUrl);
-  const [images, setImages] = useState<string[]>(marker.images || []);
+  const [imageLabel, setImageLabel] = useState(marker.imageLabel || '');
+  const [images, setImages] = useState<PlantImage[]>(() => {
+    if (!marker.images) return [];
+    return marker.images.map(img => typeof img === 'string' ? { url: img } : img);
+  });
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
   const [type, setType] = useState(marker.type);
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -25,7 +29,10 @@ export const PlantPopup: React.FC<PlantPopupProps> = ({ marker, onSave, onDelete
   const fileInputRef = useRef<HTMLInputElement>(null);
   const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
-  const allImages = [imageUrl, ...images].filter(Boolean);
+  const allImages = [
+    imageUrl ? { url: imageUrl, label: imageLabel } : null,
+    ...images
+  ].filter((img): img is PlantImage => img !== null);
 
   const resizeImage = (file: File): Promise<string> => {
     return new Promise((resolve, reject) => {
@@ -86,7 +93,8 @@ export const PlantPopup: React.FC<PlantPopupProps> = ({ marker, onSave, onDelete
     setName(marker.name);
     setDescription(marker.description);
     setImageUrl(marker.imageUrl);
-    setImages(marker.images || []);
+    setImageLabel(marker.imageLabel || '');
+    setImages(marker.images?.map(img => typeof img === 'string' ? { url: img } : img) || []);
     setType(marker.type);
   }, [marker]);
 
@@ -99,6 +107,7 @@ export const PlantPopup: React.FC<PlantPopupProps> = ({ marker, onSave, onDelete
       name === marker.name &&
       description === marker.description &&
       imageUrl === marker.imageUrl &&
+      imageLabel === (marker.imageLabel || '') &&
       JSON.stringify(images) === JSON.stringify(marker.images || []) &&
       type === marker.type
     ) {
@@ -113,7 +122,7 @@ export const PlantPopup: React.FC<PlantPopupProps> = ({ marker, onSave, onDelete
     }
 
     saveTimeoutRef.current = setTimeout(() => {
-      onSave({ ...marker, name, description, imageUrl, images, type });
+      onSave({ ...marker, name, description, imageUrl, imageLabel, images, type });
       setIsSaving(false);
     }, 1000); // 1 second debounce
 
@@ -122,7 +131,7 @@ export const PlantPopup: React.FC<PlantPopupProps> = ({ marker, onSave, onDelete
         clearTimeout(saveTimeoutRef.current);
       }
     };
-  }, [name, description, imageUrl, images, type, marker, onSave, canEdit]);
+  }, [name, description, imageUrl, imageLabel, images, type, marker, onSave, canEdit]);
 
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -140,7 +149,7 @@ export const PlantPopup: React.FC<PlantPopupProps> = ({ marker, onSave, onDelete
         if (!imageUrl) {
           setImageUrl(resizedDataUrl);
         } else {
-          setImages(prev => [...prev, resizedDataUrl]);
+          setImages(prev => [...prev, { url: resizedDataUrl }]);
         }
       } catch (err) {
         console.error("Resizing failed:", err);
@@ -173,16 +182,25 @@ export const PlantPopup: React.FC<PlantPopupProps> = ({ marker, onSave, onDelete
           {allImages.length > 0 ? (
             <div className="relative w-full h-full">
               <AnimatePresence mode="wait">
-                <motion.img 
-                  key={allImages[currentImageIndex]}
-                  src={allImages[currentImageIndex]} 
-                  alt={name} 
+                <motion.div
+                  key={allImages[currentImageIndex].url}
                   initial={{ opacity: 0 }}
                   animate={{ opacity: 1 }}
                   exit={{ opacity: 0 }}
-                  className={`w-full h-full object-cover transition-opacity duration-300 ${isResizing ? 'opacity-50' : 'opacity-100'}`}
-                  referrerPolicy="no-referrer"
-                />
+                  className="w-full h-full relative"
+                >
+                  <img 
+                    src={allImages[currentImageIndex].url} 
+                    alt={name} 
+                    className={`w-full h-full object-cover transition-opacity duration-300 ${isResizing ? 'opacity-50' : 'opacity-100'}`}
+                    referrerPolicy="no-referrer"
+                  />
+                  {allImages[currentImageIndex].label && (
+                    <div className="absolute top-3 left-3 px-2 py-1 bg-black/40 backdrop-blur-md rounded-md text-white text-[10px] font-bold uppercase tracking-wider">
+                      {allImages[currentImageIndex].label}
+                    </div>
+                  )}
+                </motion.div>
               </AnimatePresence>
 
               {allImages.length > 1 && (
@@ -287,33 +305,50 @@ export const PlantPopup: React.FC<PlantPopupProps> = ({ marker, onSave, onDelete
                 />
               </div>
               <div>
-                <label className="text-[10px] font-bold uppercase tracking-wider text-gray-400 mb-1 block">Images</label>
-                <div className="space-y-2">
-                  <div className="flex gap-2 overflow-x-auto pb-2 custom-scrollbar">
+                <label className="text-[10px] font-bold uppercase tracking-wider text-gray-400 mb-1 block">Images & Labels</label>
+                <div className="space-y-3">
+                  <div className="flex gap-3 overflow-x-auto pb-2 custom-scrollbar">
                     {allImages.map((img, idx) => (
-                      <div key={idx} className="relative shrink-0 w-16 h-16 rounded-lg overflow-hidden border border-gray-200 group">
-                        <img src={img} alt="" className="w-full h-full object-cover" />
+                      <div key={idx} className="relative shrink-0 w-24 h-24 rounded-xl overflow-hidden border border-gray-200 group flex flex-col">
+                        <img src={img.url} alt="" className="w-full h-full object-cover" />
+                        <div className="absolute inset-x-0 bottom-0 p-1.5 bg-black/60 backdrop-blur-sm">
+                          <input
+                            type="text"
+                            value={img.label || ''}
+                            onChange={(e) => {
+                              const newLabel = e.target.value;
+                              if (idx === 0) {
+                                setImageLabel(newLabel);
+                              } else {
+                                setImages(prev => prev.map((item, i) => i === idx - 1 ? { ...item, label: newLabel } : item));
+                              }
+                            }}
+                            className="w-full bg-transparent border-none text-white text-[8px] font-bold uppercase placeholder:text-white/40 focus:ring-0 p-0"
+                            placeholder="Add label..."
+                          />
+                        </div>
                         <button
                           onClick={() => {
                             if (idx === 0) {
-                              setImageUrl(images[0] || '');
+                              setImageUrl(images[0]?.url || '');
+                              setImageLabel(images[0]?.label || '');
                               setImages(prev => prev.slice(1));
                             } else {
                               setImages(prev => prev.filter((_, i) => i !== idx - 1));
                             }
                           }}
-                          className="absolute inset-0 bg-red-500/80 text-white flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
+                          className="absolute top-1 right-1 p-1 bg-red-500/80 text-white rounded-full opacity-0 group-hover:opacity-100 transition-opacity"
                         >
-                          <Trash2 size={14} />
+                          <Trash2 size={10} />
                         </button>
                       </div>
                     ))}
                     <button
                       onClick={() => fileInputRef.current?.click()}
-                      className="shrink-0 w-16 h-16 rounded-lg border-2 border-dashed border-gray-200 flex flex-col items-center justify-center text-gray-400 hover:border-emerald-500 hover:text-emerald-500 transition-all"
+                      className="shrink-0 w-24 h-24 rounded-xl border-2 border-dashed border-gray-200 flex flex-col items-center justify-center text-gray-400 hover:border-emerald-500 hover:text-emerald-500 transition-all"
                     >
-                      <PlusIcon size={20} />
-                      <span className="text-[8px] font-bold uppercase mt-1">Add</span>
+                      <PlusIcon size={24} />
+                      <span className="text-[8px] font-bold uppercase mt-1">Add Photo</span>
                     </button>
                   </div>
                   <input
@@ -396,17 +431,26 @@ export const PlantPopup: React.FC<PlantPopupProps> = ({ marker, onSave, onDelete
                 <div className="flex-1 relative flex items-center justify-center overflow-hidden">
                   <AnimatePresence mode="wait">
                     {allImages.length > 0 ? (
-                      <motion.img 
-                        key={allImages[currentImageIndex]}
-                        src={allImages[currentImageIndex]} 
-                        alt={name} 
+                      <motion.div
+                        key={allImages[currentImageIndex].url}
                         initial={{ opacity: 0, scale: 1.1 }}
                         animate={{ opacity: 1, scale: 1 }}
                         exit={{ opacity: 0, scale: 0.9 }}
                         transition={{ duration: 0.4 }}
-                        className="w-full h-full object-contain"
-                        referrerPolicy="no-referrer"
-                      />
+                        className="w-full h-full relative"
+                      >
+                        <img 
+                          src={allImages[currentImageIndex].url} 
+                          alt={name} 
+                          className="w-full h-full object-contain"
+                          referrerPolicy="no-referrer"
+                        />
+                        {allImages[currentImageIndex].label && (
+                          <div className="absolute top-6 left-6 px-4 py-2 bg-black/40 backdrop-blur-md rounded-xl text-white text-sm font-bold uppercase tracking-widest border border-white/10">
+                            {allImages[currentImageIndex].label}
+                          </div>
+                        )}
+                      </motion.div>
                     ) : (
                       <div className="w-full h-full flex items-center justify-center text-gray-300">
                         <Camera size={80} strokeWidth={1} />
@@ -440,7 +484,7 @@ export const PlantPopup: React.FC<PlantPopupProps> = ({ marker, onSave, onDelete
                         onClick={() => setCurrentImageIndex(idx)}
                         className={`relative shrink-0 w-16 h-16 rounded-xl overflow-hidden border-2 transition-all ${idx === currentImageIndex ? 'border-emerald-500 scale-105 shadow-lg shadow-emerald-500/20' : 'border-transparent opacity-50 hover:opacity-100'}`}
                       >
-                        <img src={img} alt="" className="w-full h-full object-cover" />
+                        <img src={img.url} alt="" className="w-full h-full object-cover" />
                       </button>
                     ))}
                   </div>

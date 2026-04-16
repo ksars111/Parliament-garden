@@ -1,3 +1,8 @@
+export interface PlantImage {
+  url: string;
+  label?: string;
+}
+
 export interface PlantMarker {
   id: string;
   uid: string;
@@ -6,7 +11,8 @@ export interface PlantMarker {
   name: string;
   description: string;
   imageUrl: string;
-  images?: string[];
+  imageLabel?: string;
+  images?: PlantImage[];
   createdAt: number;
   type: 'tree' | 'plant';
 }
