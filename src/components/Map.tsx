@@ -162,6 +162,12 @@ const MapComponent: React.FC<MapComponentProps> = ({
         // Visual style updates...
         const el = existingMarker.getElement();
         const inner = el.querySelector('div');
+        const label = el.querySelector('.marker-label');
+        
+        if (label) {
+          label.textContent = marker.name;
+        }
+
         if (inner) {
           inner.className = `w-10 h-10 ${marker.type === 'tree' ? 'bg-emerald-400' : 'bg-emerald-800'} rounded-full flex items-center justify-center shadow-lg border-2 border-white/40 overflow-hidden transition-transform duration-200 hover:scale-110 active:scale-95`;
           
@@ -194,6 +200,12 @@ const MapComponent: React.FC<MapComponentProps> = ({
         const inner = document.createElement('div');
         inner.className = `w-10 h-10 ${marker.type === 'tree' ? 'bg-emerald-400' : 'bg-emerald-800'} rounded-full flex items-center justify-center shadow-lg border-2 border-white/40 overflow-hidden transition-transform duration-200 hover:scale-110 active:scale-95`;
         el.appendChild(inner);
+        
+        // Add label
+        const label = document.createElement('div');
+        label.className = 'marker-label absolute left-1/2 -translate-x-1/2 top-full mt-2 px-2 py-0.5 bg-black/60 backdrop-blur-md rounded text-white text-[10px] font-medium whitespace-nowrap pointer-events-none shadow-sm border border-white/10 z-50';
+        label.textContent = marker.name;
+        el.appendChild(label);
         
         if (marker.imageUrl) {
           const img = document.createElement('img');
@@ -260,9 +272,21 @@ const MapComponent: React.FC<MapComponentProps> = ({
   }, [isLoading, onAnimationComplete]);
 
   return (
-    <div className="relative w-full h-full">
+    <div className={`relative w-full h-full ${zoomLevel > 20.5 ? 'show-labels' : ''}`}>
       <div ref={containerRef} className="w-full h-full bg-gray-900" />
       
+      <style>{`
+        .marker-label {
+          opacity: 0;
+          transform: translateY(-4px);
+          transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+        .show-labels .marker-label {
+          opacity: 1;
+          transform: translateY(0);
+        }
+      `}</style>
+
       <AnimatePresence>
         {isLoading && (
           <motion.div 
