@@ -1,7 +1,7 @@
 import React, { useState, useCallback, useEffect, useRef } from 'react';
 import maplibregl from 'maplibre-gl';
 import 'maplibre-gl/dist/maplibre-gl.css';
-import { Leaf, Plus, Map as MapIcon, Info, List, Search, X, ChevronRight, Pencil, ShieldCheck, AlertCircle, Layers, Home, Maximize } from 'lucide-react';
+import { Leaf, Plus, Map as MapIcon, Info, X, ChevronRight, Pencil, ShieldCheck, AlertCircle, Layers, Home } from 'lucide-react';
 import { PlantMarker } from '../types';
 import { PlantPopup } from './PlantPopup';
 import { motion, AnimatePresence } from 'motion/react';
@@ -361,7 +361,7 @@ const MapComponent: React.FC<MapComponentProps> = ({
           className="w-12 h-12 bg-black/40 backdrop-blur-md border border-white/10 rounded-2xl flex items-center justify-center text-white/80 hover:text-white hover:bg-black/60 transition-all shadow-xl pointer-events-auto group"
           title="Reset View"
         >
-          <Maximize size={20} className="group-hover:scale-110 transition-transform" />
+          <Home size={20} className="group-hover:scale-110 transition-transform" />
         </button>
       </div>
 
