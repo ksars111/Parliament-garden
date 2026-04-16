@@ -141,9 +141,9 @@ export const PlantPopup: React.FC<PlantPopupProps> = ({ marker, onSave, onDelete
         initial={{ opacity: 0, scale: 0.9, y: 10 }}
         animate={{ opacity: 1, scale: 1, y: 0 }}
         exit={{ opacity: 0, scale: 0.9, y: 10 }}
-        className="bg-white rounded-2xl shadow-2xl overflow-y-auto w-80 max-w-full max-h-[85vh] border border-gray-100 custom-scrollbar"
+        className="bg-white rounded-2xl shadow-2xl overflow-hidden w-80 max-w-full max-h-[90vh] border border-gray-100 flex flex-col"
       >
-        <div className="relative h-80 bg-gray-200 group">
+        <div className="relative h-64 shrink-0 bg-gray-200 group">
           {imageUrl ? (
             <>
               <img 
@@ -188,7 +188,7 @@ export const PlantPopup: React.FC<PlantPopupProps> = ({ marker, onSave, onDelete
           )}
         </div>
 
-        <div className="p-5 space-y-4">
+        <div className="p-5 space-y-4 overflow-y-auto custom-scrollbar">
           {canEdit ? (
             <div className="space-y-3">
               <div>
@@ -303,7 +303,7 @@ export const PlantPopup: React.FC<PlantPopupProps> = ({ marker, onSave, onDelete
                   {type}
                 </span>
               </div>
-              <div className="mt-1">
+              <div className="mt-1 max-h-48 overflow-y-auto pr-2 custom-scrollbar">
                   <p className="text-sm text-gray-600 leading-relaxed whitespace-pre-wrap">
                     {description || 'No description provided yet.'}
                   </p>
