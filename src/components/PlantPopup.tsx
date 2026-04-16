@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { X, Save, Trash2, Camera, Upload, Maximize2 } from 'lucide-react';
+import { X, Save, Trash2, Camera, Upload, Maximize2, ChevronLeft, ChevronRight, Plus as PlusIcon } from 'lucide-react';
 import { PlantMarker } from '../types';
 import { motion, AnimatePresence } from 'motion/react';
 
@@ -15,6 +15,8 @@ export const PlantPopup: React.FC<PlantPopupProps> = ({ marker, onSave, onDelete
   const [name, setName] = useState(marker.name);
   const [description, setDescription] = useState(marker.description);
   const [imageUrl, setImageUrl] = useState(marker.imageUrl);
+  const [images, setImages] = useState<string[]>(marker.images || []);
+  const [currentImageIndex, setCurrentImageIndex] = useState(0);
   const [type, setType] = useState(marker.type);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isResizing, setIsResizing] = useState(false);
@@ -22,6 +24,8 @@ export const PlantPopup: React.FC<PlantPopupProps> = ({ marker, onSave, onDelete
   const [error, setError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
+  const allImages = [imageUrl, ...images].filter(Boolean);
 
   const resizeImage = (file: File): Promise<string> => {
     return new Promise((resolve, reject) => {
@@ -81,6 +85,7 @@ export const PlantPopup: React.FC<PlantPopupProps> = ({ marker, onSave, onDelete
     setName(marker.name);
     setDescription(marker.description);
     setImageUrl(marker.imageUrl);
+    setImages(marker.images || []);
     setType(marker.type);
   }, [marker]);
 
@@ -93,6 +98,7 @@ export const PlantPopup: React.FC<PlantPopupProps> = ({ marker, onSave, onDelete
       name === marker.name &&
       description === marker.description &&
       imageUrl === marker.imageUrl &&
+      JSON.stringify(images) === JSON.stringify(marker.images || []) &&
       type === marker.type
     ) {
       setIsSaving(false);
@@ -106,7 +112,7 @@ export const PlantPopup: React.FC<PlantPopupProps> = ({ marker, onSave, onDelete
     }
 
     saveTimeoutRef.current = setTimeout(() => {
-      onSave({ ...marker, name, description, imageUrl, type });
+      onSave({ ...marker, name, description, imageUrl, images, type });
       setIsSaving(false);
     }, 1000); // 1 second debounce
 
@@ -115,7 +121,7 @@ export const PlantPopup: React.FC<PlantPopupProps> = ({ marker, onSave, onDelete
         clearTimeout(saveTimeoutRef.current);
       }
     };
-  }, [name, description, imageUrl, type, marker, onSave, canEdit]);
+  }, [name, description, imageUrl, images, type, marker, onSave, canEdit]);
 
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -125,7 +131,11 @@ export const PlantPopup: React.FC<PlantPopupProps> = ({ marker, onSave, onDelete
       
       try {
         const resizedDataUrl = await resizeImage(file);
-        setImageUrl(resizedDataUrl);
+        if (!imageUrl) {
+          setImageUrl(resizedDataUrl);
+        } else {
+          setImages(prev => [...prev, resizedDataUrl]);
+        }
       } catch (err) {
         console.error("Resizing failed:", err);
         setError("Failed to process image. Please try another one.");
@@ -133,6 +143,16 @@ export const PlantPopup: React.FC<PlantPopupProps> = ({ marker, onSave, onDelete
         setIsResizing(false);
       }
     }
+  };
+
+  const nextImage = (e?: React.MouseEvent) => {
+    e?.stopPropagation();
+    setCurrentImageIndex((prev) => (prev + 1) % allImages.length);
+  };
+
+  const prevImage = (e?: React.MouseEvent) => {
+    e?.stopPropagation();
+    setCurrentImageIndex((prev) => (prev - 1 + allImages.length) % allImages.length);
   };
 
   return (
@@ -143,15 +163,47 @@ export const PlantPopup: React.FC<PlantPopupProps> = ({ marker, onSave, onDelete
         exit={{ opacity: 0, scale: 0.9, y: 10 }}
         className="bg-white rounded-2xl shadow-2xl overflow-hidden w-80 max-w-full max-h-[90vh] border border-gray-100 flex flex-col"
       >
-        <div className="relative h-64 shrink-0 bg-gray-200 group">
-          {imageUrl ? (
-            <>
-              <img 
-                src={imageUrl} 
-                alt={name} 
-                className={`w-full h-full object-cover transition-opacity duration-300 ${isResizing ? 'opacity-50' : 'opacity-100'}`}
-                referrerPolicy="no-referrer"
-              />
+        <div className="relative h-64 shrink-0 bg-gray-200 group overflow-hidden">
+          {allImages.length > 0 ? (
+            <div className="relative w-full h-full">
+              <AnimatePresence mode="wait">
+                <motion.img 
+                  key={allImages[currentImageIndex]}
+                  src={allImages[currentImageIndex]} 
+                  alt={name} 
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  exit={{ opacity: 0 }}
+                  className={`w-full h-full object-cover transition-opacity duration-300 ${isResizing ? 'opacity-50' : 'opacity-100'}`}
+                  referrerPolicy="no-referrer"
+                />
+              </AnimatePresence>
+
+              {allImages.length > 1 && (
+                <>
+                  <button
+                    onClick={prevImage}
+                    className="absolute left-2 top-1/2 -translate-y-1/2 p-1.5 bg-black/20 hover:bg-black/40 backdrop-blur-md rounded-full text-white opacity-0 group-hover:opacity-100 transition-opacity"
+                  >
+                    <ChevronLeft size={18} />
+                  </button>
+                  <button
+                    onClick={nextImage}
+                    className="absolute right-2 top-1/2 -translate-y-1/2 p-1.5 bg-black/20 hover:bg-black/40 backdrop-blur-md rounded-full text-white opacity-0 group-hover:opacity-100 transition-opacity"
+                  >
+                    <ChevronRight size={18} />
+                  </button>
+                  <div className="absolute bottom-3 left-1/2 -translate-x-1/2 flex gap-1">
+                    {allImages.map((_, i) => (
+                      <div 
+                        key={i} 
+                        className={`w-1.5 h-1.5 rounded-full transition-all ${i === currentImageIndex ? 'bg-white w-3' : 'bg-white/40'}`}
+                      />
+                    ))}
+                  </div>
+                </>
+              )}
+
               {isResizing && (
                 <div className="absolute inset-0 flex items-center justify-center bg-black/20">
                   <div className="w-8 h-8 border-2 border-white/30 border-t-white rounded-full animate-spin" />
@@ -164,7 +216,7 @@ export const PlantPopup: React.FC<PlantPopupProps> = ({ marker, onSave, onDelete
               >
                 <Maximize2 size={18} />
               </button>
-            </>
+            </div>
           ) : (
             <div className="w-full h-full flex items-center justify-center text-gray-400 bg-gray-50">
               {isResizing ? (
@@ -229,31 +281,35 @@ export const PlantPopup: React.FC<PlantPopupProps> = ({ marker, onSave, onDelete
                 />
               </div>
               <div>
-                <label className="text-[10px] font-bold uppercase tracking-wider text-gray-400 mb-1 block">Image</label>
-                <div className="flex gap-2">
-                  <input
-                    type="text"
-                    value={imageUrl}
-                    onChange={(e) => setImageUrl(e.target.value)}
-                    className="flex-1 px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-all text-sm"
-                    placeholder="URL or upload..."
-                  />
-                  {imageUrl && (
+                <label className="text-[10px] font-bold uppercase tracking-wider text-gray-400 mb-1 block">Images</label>
+                <div className="space-y-2">
+                  <div className="flex gap-2 overflow-x-auto pb-2 custom-scrollbar">
+                    {allImages.map((img, idx) => (
+                      <div key={idx} className="relative shrink-0 w-16 h-16 rounded-lg overflow-hidden border border-gray-200 group">
+                        <img src={img} alt="" className="w-full h-full object-cover" />
+                        <button
+                          onClick={() => {
+                            if (idx === 0) {
+                              setImageUrl(images[0] || '');
+                              setImages(prev => prev.slice(1));
+                            } else {
+                              setImages(prev => prev.filter((_, i) => i !== idx - 1));
+                            }
+                          }}
+                          className="absolute inset-0 bg-red-500/80 text-white flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
+                        >
+                          <Trash2 size={14} />
+                        </button>
+                      </div>
+                    ))}
                     <button
-                      onClick={() => setImageUrl('')}
-                      className="p-2 bg-red-50 hover:bg-red-100 text-red-500 rounded-lg transition-colors"
-                      title="Clear image"
+                      onClick={() => fileInputRef.current?.click()}
+                      className="shrink-0 w-16 h-16 rounded-lg border-2 border-dashed border-gray-200 flex flex-col items-center justify-center text-gray-400 hover:border-emerald-500 hover:text-emerald-500 transition-all"
                     >
-                      <X size={18} />
+                      <PlusIcon size={20} />
+                      <span className="text-[8px] font-bold uppercase mt-1">Add</span>
                     </button>
-                  )}
-                  <button
-                    onClick={() => fileInputRef.current?.click()}
-                    className="p-2 bg-gray-100 hover:bg-gray-200 text-gray-600 rounded-lg transition-colors"
-                    title="Upload image"
-                  >
-                    <Upload size={18} />
-                  </button>
+                  </div>
                   <input
                     ref={fileInputRef}
                     type="file"
@@ -330,19 +386,60 @@ export const PlantPopup: React.FC<PlantPopupProps> = ({ marker, onSave, onDelete
               className="bg-white rounded-3xl overflow-hidden max-w-4xl w-full max-h-[90vh] flex flex-col md:flex-row shadow-2xl"
               onClick={(e) => e.stopPropagation()}
             >
-              <div className="md:w-1/2 h-[50vh] md:h-auto md:min-h-[600px] bg-gray-900 relative flex items-center justify-center">
-                {imageUrl ? (
-                  <img 
-                    src={imageUrl} 
-                    alt={name} 
-                    className="w-full h-full object-contain"
-                    referrerPolicy="no-referrer"
-                  />
-                ) : (
-                  <div className="w-full h-full flex items-center justify-center text-gray-300">
-                    <Camera size={80} strokeWidth={1} />
+              <div className="md:w-1/2 h-[50vh] md:h-auto md:min-h-[600px] bg-gray-900 relative flex flex-col">
+                <div className="flex-1 relative flex items-center justify-center overflow-hidden">
+                  <AnimatePresence mode="wait">
+                    {allImages.length > 0 ? (
+                      <motion.img 
+                        key={allImages[currentImageIndex]}
+                        src={allImages[currentImageIndex]} 
+                        alt={name} 
+                        initial={{ opacity: 0, scale: 1.1 }}
+                        animate={{ opacity: 1, scale: 1 }}
+                        exit={{ opacity: 0, scale: 0.9 }}
+                        transition={{ duration: 0.4 }}
+                        className="w-full h-full object-contain"
+                        referrerPolicy="no-referrer"
+                      />
+                    ) : (
+                      <div className="w-full h-full flex items-center justify-center text-gray-300">
+                        <Camera size={80} strokeWidth={1} />
+                      </div>
+                    )}
+                  </AnimatePresence>
+
+                  {allImages.length > 1 && (
+                    <>
+                      <button
+                        onClick={prevImage}
+                        className="absolute left-4 top-1/2 -translate-y-1/2 p-3 bg-black/40 hover:bg-black/60 backdrop-blur-md rounded-full text-white transition-all hover:scale-110"
+                      >
+                        <ChevronLeft size={24} />
+                      </button>
+                      <button
+                        onClick={nextImage}
+                        className="absolute right-4 top-1/2 -translate-y-1/2 p-3 bg-black/40 hover:bg-black/60 backdrop-blur-md rounded-full text-white transition-all hover:scale-110"
+                      >
+                        <ChevronRight size={24} />
+                      </button>
+                    </>
+                  )}
+                </div>
+
+                {allImages.length > 1 && (
+                  <div className="h-24 bg-black/20 backdrop-blur-md p-4 flex gap-3 overflow-x-auto custom-scrollbar shrink-0">
+                    {allImages.map((img, idx) => (
+                      <button
+                        key={idx}
+                        onClick={() => setCurrentImageIndex(idx)}
+                        className={`relative shrink-0 w-16 h-16 rounded-xl overflow-hidden border-2 transition-all ${idx === currentImageIndex ? 'border-emerald-500 scale-105 shadow-lg shadow-emerald-500/20' : 'border-transparent opacity-50 hover:opacity-100'}`}
+                      >
+                        <img src={img} alt="" className="w-full h-full object-cover" />
+                      </button>
+                    ))}
                   </div>
                 )}
+
                 <button 
                   onClick={() => setIsModalOpen(false)}
                   className="absolute top-4 left-4 p-2 bg-black/40 hover:bg-black/60 backdrop-blur-md rounded-full text-white md:hidden transition-colors"
