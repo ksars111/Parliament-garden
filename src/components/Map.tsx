@@ -350,6 +350,7 @@ export const GardenMap: React.FC = () => {
   const [showInstructions, setShowInstructions] = useState(false);
   const [showLegend, setShowLegend] = useState(false);
   const [isDataLoading, setIsDataLoading] = useState(true);
+  const [isQuotaExceeded, setIsQuotaExceeded] = useState(false);
   const mapRef = useRef<maplibregl.Map | null>(null);
 
   // Handle Anonymous Auth
@@ -379,22 +380,30 @@ export const GardenMap: React.FC = () => {
       setMarkers(newMarkers);
       setIsConnected(true);
       setIsDataLoading(false);
-      
-      // Sync selected marker if it exists
-      if (selectedMarker) {
-        const updatedSelected = newMarkers.find(m => m.id === selectedMarker.id);
-        if (updatedSelected) {
-          setSelectedMarker(updatedSelected);
-        }
-      }
     }, (error) => {
       setIsConnected(false);
       setIsDataLoading(false);
+      
+      const errorMsg = error instanceof Error ? error.message : String(error);
+      if (errorMsg.includes('Quota limit exceeded') || errorMsg.includes('Quota exceeded')) {
+        setIsQuotaExceeded(true);
+      }
+      
       handleFirestoreError(error, OperationType.LIST, 'markers');
     });
 
     return () => unsubscribe();
-  }, [selectedMarker?.id]);
+  }, []);
+
+  // Keep selected marker in sync with updated list
+  useEffect(() => {
+    if (selectedMarker) {
+      const updated = markers.find(m => m.id === selectedMarker.id);
+      if (updated && JSON.stringify(updated) !== JSON.stringify(selectedMarker)) {
+        setSelectedMarker(updated);
+      }
+    }
+  }, [markers, selectedMarker?.id]);
 
   const handleUnlockEditing = () => {
     setIsUnlocked(true);
@@ -833,7 +842,7 @@ export const GardenMap: React.FC = () => {
 
       {/* Global Loading Screen */}
       <AnimatePresence>
-        {isActuallyLoading && (
+        {isActuallyLoading && !isQuotaExceeded && (
           <motion.div 
             initial={{ opacity: 1 }}
             exit={{ opacity: 0 }}
@@ -856,6 +865,53 @@ export const GardenMap: React.FC = () => {
                 </div>
               </div>
             </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Quota Exceeded Screen */}
+      <AnimatePresence>
+        {isQuotaExceeded && (
+          <motion.div 
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            className="absolute inset-0 z-[10001] flex flex-col items-center justify-center bg-zinc-950 p-6 text-center backdrop-blur-3xl"
+          >
+            <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,rgba(16,185,129,0.05),transparent_70%)]" />
+            
+            <motion.div
+              initial={{ scale: 0.9, y: 20 }}
+              animate={{ scale: 1, y: 0 }}
+              className="bg-zinc-900/50 border border-white/10 p-10 rounded-[40px] shadow-2xl max-w-md w-full relative overflow-hidden backdrop-blur-xl"
+            >
+              <div className="w-20 h-20 bg-emerald-500/10 rounded-3xl flex items-center justify-center mx-auto mb-8">
+                <AlertCircle className="text-emerald-500" size={40} />
+              </div>
+
+              <h2 className="text-2xl font-bold text-white mb-4 tracking-tight">Free Tier Quota Exceeded</h2>
+              
+              <div className="space-y-4 text-gray-400 text-sm leading-relaxed mb-8">
+                <p>
+                  This project has reached the 50,000 daily read limit provided by the Firestore free tier.
+                </p>
+                <p className="text-xs opacity-60">
+                  The quota will automatically reset at midnight (Pacific Time).
+                </p>
+              </div>
+
+              <div className="p-4 bg-emerald-500/5 rounded-2xl border border-emerald-500/10 text-left mb-8 text-[11px] leading-relaxed">
+                <span className="text-emerald-400 font-bold uppercase tracking-wider block mb-1">Developer Note</span>
+                Data fetching has been optimized to minimize reads, but the current daily limit has already been consumed. 
+                Please try again tomorrow or upgrade the plan in the Firebase Console.
+              </div>
+
+              <button
+                onClick={() => window.location.reload()}
+                className="w-full py-4 bg-emerald-500 hover:bg-emerald-600 text-white rounded-2xl font-semibold transition-all shadow-lg active:scale-[0.98]"
+              >
+                Try Refreshing
+              </button>
+            </motion.div>
           </motion.div>
         )}
       </AnimatePresence>

@@ -41,6 +41,13 @@ async function testConnection(retries = 3) {
       return;
     } catch (error) {
       if (error instanceof Error) {
+        const isQuotaError = error.message.includes('Quota limit exceeded') || error.message.includes('Quota exceeded');
+        
+        if (isQuotaError) {
+          console.error("Firestore Quota Exceeded. Stopping connection tests.");
+          return; // Stop immediately if it's a quota error
+        }
+
         console.warn(`Firestore connection attempt ${i + 1} failed:`, error.message);
         if (i === retries - 1) {
           if (error.message.includes('the client is offline') || error.message.includes('unavailable')) {
@@ -87,8 +94,11 @@ interface FirestoreErrorInfo {
 }
 
 export function handleFirestoreError(error: unknown, operationType: OperationType, path: string | null) {
+  const errorMessage = error instanceof Error ? error.message : String(error);
+  const isQuotaError = errorMessage.includes('Quota limit exceeded') || errorMessage.includes('Quota exceeded');
+
   const errInfo: FirestoreErrorInfo = {
-    error: error instanceof Error ? error.message : String(error),
+    error: errorMessage,
     authInfo: {
       userId: auth.currentUser?.uid,
       email: auth.currentUser?.email,
@@ -105,6 +115,13 @@ export function handleFirestoreError(error: unknown, operationType: OperationTyp
     operationType,
     path
   }
+
+  // Log as error either way
   console.error('Firestore Error: ', JSON.stringify(errInfo));
-  throw new Error(JSON.stringify(errInfo));
+  
+  // Only throw if it's NOT a quota error. 
+  // Quota errors are handled via UI state to prevent noisy uncaught exceptions.
+  if (!isQuotaError) {
+    throw new Error(JSON.stringify(errInfo));
+  }
 }
