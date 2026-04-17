@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { X, Save, Trash2, Camera, Upload, Maximize2, ChevronLeft, ChevronRight, Plus as PlusIcon, Tag, GripVertical, ImageUp } from 'lucide-react';
+import { X, Save, Trash2, Camera, Upload, Maximize2, ChevronLeft, ChevronRight, Plus as PlusIcon, Tag, GripVertical, ImageUp, RotateCcw } from 'lucide-react';
 import { PlantMarker, PlantImage } from '../types';
 import { motion, AnimatePresence, Reorder } from 'motion/react';
 import { uploadImage } from '../lib/cloudinary';
@@ -27,7 +27,11 @@ export const PlantPopup: React.FC<PlantPopupProps> = ({ marker, onSave, onDelete
   const [isUploading, setIsUploading] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [zoomScale, setZoomScale] = useState(1);
+  const [zoomPosition, setZoomPosition] = useState({ x: 0, y: 0 });
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const imageContainerRef = useRef<HTMLDivElement>(null);
+  const lastTouchDistance = useRef<number | null>(null);
   const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   const allImages = [
@@ -79,6 +83,50 @@ export const PlantPopup: React.FC<PlantPopupProps> = ({ marker, onSave, onDelete
       }
     };
   }, [name, description, imageUrl, imageLabel, images, type, marker, onSave, canEdit]);
+
+  // Reset zoom when switching images
+  React.useEffect(() => {
+    setZoomScale(1);
+    setZoomPosition({ x: 0, y: 0 });
+  }, [currentImageIndex]);
+
+  const handleWheel = (e: React.WheelEvent) => {
+    if (e.ctrlKey || e.metaKey || zoomScale > 1) {
+      e.preventDefault();
+      const delta = -e.deltaY * 0.005;
+      const newScale = Math.min(Math.max(zoomScale + delta, 1), 5);
+      setZoomScale(newScale);
+      if (newScale === 1) setZoomPosition({ x: 0, y: 0 });
+    }
+  };
+
+  const handleTouchStart = (e: React.TouchEvent) => {
+    if (e.touches.length === 2) {
+      lastTouchDistance.current = Math.hypot(
+        e.touches[0].pageX - e.touches[1].pageX,
+        e.touches[0].pageY - e.touches[1].pageY
+      );
+    }
+  };
+
+  const handleTouchMove = (e: React.TouchEvent) => {
+    if (e.touches.length === 2 && lastTouchDistance.current !== null) {
+      const distance = Math.hypot(
+        e.touches[0].pageX - e.touches[1].pageX,
+        e.touches[0].pageY - e.touches[1].pageY
+      );
+      
+      const delta = (distance - lastTouchDistance.current) * 0.01;
+      const newScale = Math.min(Math.max(zoomScale + delta, 1), 5);
+      setZoomScale(newScale);
+      if (newScale === 1) setZoomPosition({ x: 0, y: 0 });
+      lastTouchDistance.current = distance;
+    }
+  };
+
+  const handleTouchEnd = () => {
+    lastTouchDistance.current = null;
+  };
 
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -141,7 +189,14 @@ export const PlantPopup: React.FC<PlantPopupProps> = ({ marker, onSave, onDelete
         exit={{ opacity: 0, scale: 0.9, y: 10 }}
         className="bg-white rounded-2xl shadow-2xl overflow-hidden w-80 max-w-full max-h-[90vh] border border-gray-100 flex flex-col"
       >
-        <div className="relative h-64 shrink-0 bg-gray-200 group overflow-hidden">
+        <div 
+          className="relative h-64 shrink-0 bg-gray-200 group overflow-hidden touch-none"
+          onWheel={handleWheel}
+          onTouchStart={handleTouchStart}
+          onTouchMove={handleTouchMove}
+          onTouchEnd={handleTouchEnd}
+          ref={imageContainerRef}
+        >
           {allImages.length > 0 ? (
             <div className="relative w-full h-full">
               <AnimatePresence mode="wait">
@@ -150,21 +205,49 @@ export const PlantPopup: React.FC<PlantPopupProps> = ({ marker, onSave, onDelete
                   initial={{ opacity: 0 }}
                   animate={{ opacity: 1 }}
                   exit={{ opacity: 0 }}
-                  className="w-full h-full relative"
+                  className="w-full h-full relative overflow-hidden"
                 >
-                  <img 
+                  <motion.img 
                     src={allImages[currentImageIndex].url} 
                     alt={name} 
+                    style={{ 
+                      scale: zoomScale,
+                      x: zoomPosition.x,
+                      y: zoomPosition.y,
+                      cursor: zoomScale > 1 ? 'grab' : 'default'
+                    }}
+                    drag={zoomScale > 1}
+                    dragConstraints={imageContainerRef}
+                    onDragEnd={(_, info) => {
+                      setZoomPosition(prev => ({
+                        x: prev.x + info.offset.x,
+                        y: prev.y + info.offset.y
+                      }));
+                    }}
                     className={`w-full h-full object-cover transition-opacity duration-300 ${isUploading ? 'opacity-50' : 'opacity-100'}`}
                     referrerPolicy="no-referrer"
+                    draggable={false}
                   />
                   {allImages[currentImageIndex].label && (
-                    <div className="absolute top-3 left-3 px-2 py-1 bg-black/40 backdrop-blur-md rounded-md text-white text-[10px] font-bold uppercase tracking-wider">
+                    <div className="absolute top-3 left-3 px-2 py-1 bg-black/40 backdrop-blur-md rounded-md text-white text-[10px] font-bold uppercase tracking-wider pointer-events-none">
                       {allImages[currentImageIndex].label}
                     </div>
                   )}
                 </motion.div>
               </AnimatePresence>
+
+              {zoomScale > 1 && (
+                <button
+                  onClick={() => {
+                    setZoomScale(1);
+                    setZoomPosition({ x: 0, y: 0 });
+                  }}
+                  className="absolute top-3 left-1/2 -translate-x-1/2 p-2 bg-black/40 hover:bg-black/60 backdrop-blur-md rounded-full text-white z-10 flex items-center gap-2 text-[10px] font-bold uppercase tracking-wide px-3"
+                >
+                  <RotateCcw size={12} />
+                  Reset Zoom
+                </button>
+              )}
 
               {allImages.length > 1 && (
                 <>
