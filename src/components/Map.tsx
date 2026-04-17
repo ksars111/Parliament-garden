@@ -381,26 +381,60 @@ export const GardenMap: React.FC = () => {
 
     const fetchInitialData = async () => {
       setIsDataLoading(true);
+      
+      const tryLocalStorage = () => {
+        const cached = localStorage.getItem('garden_cache');
+        if (cached) {
+          try {
+            const parsed = JSON.parse(cached);
+            if (Array.isArray(parsed.markers)) {
+              setMarkers(parsed.markers);
+              console.log('Serving garden data from local cache (offline mode)');
+              return true;
+            }
+          } catch (e) {
+            console.error('Failed to parse garden cache:', e);
+          }
+        }
+        return false;
+      };
+
       try {
-        // Try fetching from the Vercel Shield API first
-        // This is cached at the edge independently of Firestore reads
+        // Tier 1: Try fetching from the Vercel Shield API
         const response = await fetch('/api/garden');
+        
+        if (response.status === 503 || response.status === 429) {
+          setIsQuotaExceeded(true);
+          throw new Error('Quota exceeded');
+        }
+
         if (response.ok) {
           const data = await response.json();
-          setMarkers(data.markers || []);
+          const markers = data.markers || [];
+          setMarkers(markers);
+          localStorage.setItem('garden_cache', JSON.stringify({ markers, timestamp: Date.now() }));
           setIsDataLoading(false);
           setIsConnected(true);
         } else {
           throw new Error('API fetch failed');
         }
       } catch (err) {
+        if (err instanceof Error && err.message === 'Quota exceeded') {
+          tryLocalStorage(); // Try to show old data even if quota is hit
+          setIsDataLoading(false);
+          return;
+        }
+
         console.warn('Vercel Shield API fetch failed, falling back to direct Firestore. Error:', err);
-        // Fallback to direct Firestore read if API fails
+        
+        // Tier 2: Fallback to direct Firestore read
         try {
           const docRef = doc(db, 'garden', 'data');
           const docSnap = await getDoc(docRef);
           if (docSnap.exists()) {
-            setMarkers(docSnap.data().markers || []);
+            const markers = docSnap.data().markers || [];
+            setMarkers(markers);
+            localStorage.setItem('garden_cache', JSON.stringify({ markers, timestamp: Date.now() }));
           }
           setIsConnected(true);
         } catch (fsErr) {
@@ -408,6 +442,9 @@ export const GardenMap: React.FC = () => {
           if (errorMsg.includes('Quota limit exceeded') || errorMsg.includes('Quota exceeded')) {
             setIsQuotaExceeded(true);
           }
+          
+          // Tier 3: Final fallback to Local Storage if network/cloud is completely down
+          tryLocalStorage();
         } finally {
           setIsDataLoading(false);
         }

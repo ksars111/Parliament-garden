@@ -63,7 +63,7 @@ async function testConnection(retries = 3) {
     }
   }
 }
-testConnection();
+// testConnection(); // Silenced to prevent noise on startup in production/quota-limited environments
 
 export enum OperationType {
   CREATE = 'create',

@@ -44,6 +44,16 @@ async function startServer() {
       }
     } catch (error) {
       console.error('Server-side Firestore error:', error);
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      const isQuotaError = errorMessage.includes('Quota limit exceeded') || errorMessage.includes('Quota exceeded');
+      
+      if (isQuotaError) {
+        return res.status(503).json({ 
+          error: 'Quota Exceeded', 
+          message: 'The free daily read limit for the garden map has been reached. Please check back tomorrow.' 
+        });
+      }
+      
       res.status(500).json({ error: 'Failed to fetch garden data' });
     }
   });
