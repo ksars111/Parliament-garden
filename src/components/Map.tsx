@@ -352,6 +352,26 @@ export const GardenMap: React.FC = () => {
   const [showWelcome, setShowWelcome] = useState(false);
   const [showInstructions, setShowInstructions] = useState(false);
   const [showLegend, setShowLegend] = useState(false);
+  const legendRef = useRef<HTMLDivElement>(null);
+
+  // Close legend on click away
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      if (legendRef.current && !legendRef.current.contains(event.target as Node)) {
+        setShowLegend(false);
+      }
+    }
+
+    if (showLegend) {
+      document.addEventListener('mousedown', handleClickOutside);
+    } else {
+      document.removeEventListener('mousedown', handleClickOutside);
+    }
+
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [showLegend]);
   const [isDataLoading, setIsDataLoading] = useState(true);
   const [isQuotaExceeded, setIsQuotaExceeded] = useState(false);
   const mapRef = useRef<maplibregl.Map | null>(null);
@@ -804,17 +824,17 @@ export const GardenMap: React.FC = () => {
       </div>
 
       {/* Legend Dropdown (Top Right) */}
-      <div className="absolute top-4 right-4 z-[2000] flex flex-col items-end gap-2">
+      <div ref={legendRef} className="absolute top-4 right-4 z-[2000] flex flex-col items-end gap-2">
         <button 
           onClick={() => setShowLegend(!showLegend)}
-          className={`h-10 px-4 backdrop-blur-md border rounded-full flex items-center gap-2 transition-all active:scale-95 shadow-xl ${
+          className={`w-10 h-10 md:w-12 md:h-12 backdrop-blur-md border rounded-full flex items-center justify-center transition-all active:scale-95 shadow-xl ${
             showLegend 
               ? 'bg-emerald-500 border-emerald-400 text-white' 
               : 'bg-zinc-900/80 border-white/10 text-white/60 hover:text-white hover:bg-zinc-800'
           }`}
+          title="Garden Legend"
         >
-          <List size={18} />
-          <span className="text-[10px] font-bold uppercase tracking-wider">Garden Legend</span>
+          <List size={20} />
         </button>
 
         <AnimatePresence>
