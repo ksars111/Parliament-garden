@@ -485,7 +485,7 @@ export const GardenMap: React.FC = () => {
       longitude: lngLat.lng,
       name: 'New Tree',
       description: '',
-      imageUrl: `https://picsum.photos/seed/${Math.random()}/400/300`,
+      imageUrl: '',
       createdAt: Date.now(),
       type: 'tree'
     };

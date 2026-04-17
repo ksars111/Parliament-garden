@@ -205,11 +205,26 @@ export const PlantPopup: React.FC<PlantPopupProps> = ({ marker, onSave, onDelete
               </button>
             </div>
           ) : (
-            <div className="w-full h-full flex items-center justify-center text-gray-400 bg-gray-50">
+            <div 
+              className={`w-full h-full flex flex-col items-center justify-center bg-gray-50 transition-colors ${canEdit && isConfigured && !isUploading ? 'cursor-pointer hover:bg-gray-100' : ''}`}
+              onClick={() => {
+                if (canEdit && isConfigured && !isUploading) {
+                  fileInputRef.current?.click();
+                }
+              }}
+            >
               {isUploading ? (
                 <div className="w-12 h-12 border-4 border-emerald-500/20 border-t-emerald-500 rounded-full animate-spin" />
               ) : (
-                <Camera size={48} strokeWidth={1} />
+                <>
+                  <Camera size={48} strokeWidth={1} className="text-gray-300 mb-2" />
+                  {canEdit && isConfigured && (
+                    <span className="text-[10px] font-bold uppercase tracking-[0.2em] text-gray-400">Click to upload photo</span>
+                  )}
+                  {(!isConfigured && canEdit) && (
+                    <span className="text-[10px] font-bold uppercase tracking-[0.2em] text-amber-500 text-center px-4">Cloudinary not set up</span>
+                  )}
+                </>
               )}
             </div>
           )}
