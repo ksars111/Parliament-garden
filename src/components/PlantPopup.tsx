@@ -190,7 +190,7 @@ export const PlantPopup: React.FC<PlantPopupProps> = ({ marker, onSave, onDelete
         className="bg-white rounded-2xl shadow-2xl overflow-hidden w-80 max-w-full max-h-[90vh] border border-gray-100 flex flex-col"
       >
         <div 
-          className="relative h-64 shrink-0 bg-gray-200 group overflow-hidden touch-none"
+          className="relative h-96 shrink-0 bg-gray-200 group overflow-hidden touch-none"
           onWheel={handleWheel}
           onTouchStart={handleTouchStart}
           onTouchMove={handleTouchMove}
