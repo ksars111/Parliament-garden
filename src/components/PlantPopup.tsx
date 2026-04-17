@@ -1,7 +1,8 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { X, Save, Trash2, Camera, Upload, Maximize2, ChevronLeft, ChevronRight, Plus as PlusIcon, Tag, GripVertical } from 'lucide-react';
+import { X, Save, Trash2, Camera, Upload, Maximize2, ChevronLeft, ChevronRight, Plus as PlusIcon, Tag, GripVertical, ImageUp } from 'lucide-react';
 import { PlantMarker, PlantImage } from '../types';
 import { motion, AnimatePresence, Reorder } from 'motion/react';
+import { uploadImage } from '../lib/cloudinary';
 
 interface PlantPopupProps {
   marker: PlantMarker;
@@ -23,7 +24,7 @@ export const PlantPopup: React.FC<PlantPopupProps> = ({ marker, onSave, onDelete
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
   const [type, setType] = useState(marker.type);
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [isResizing, setIsResizing] = useState(false);
+  const [isUploading, setIsUploading] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -33,60 +34,6 @@ export const PlantPopup: React.FC<PlantPopupProps> = ({ marker, onSave, onDelete
     imageUrl ? { url: imageUrl, label: imageLabel } : null,
     ...images
   ].filter((img): img is PlantImage => img !== null);
-
-  const resizeImage = (file: File): Promise<string> => {
-    return new Promise((resolve, reject) => {
-      const reader = new FileReader();
-      reader.onload = (e) => {
-        const img = new Image();
-        img.onload = () => {
-          const canvas = document.createElement('canvas');
-          const MAX_WIDTH = 1024;
-          const MAX_HEIGHT = 1024;
-          let width = img.width;
-          let height = img.height;
-
-          if (width > height) {
-            if (width > MAX_WIDTH) {
-              height *= MAX_WIDTH / width;
-              width = MAX_WIDTH;
-            }
-          } else {
-            if (height > MAX_HEIGHT) {
-              width *= MAX_HEIGHT / height;
-              height = MAX_HEIGHT;
-            }
-          }
-
-          canvas.width = width;
-          canvas.height = height;
-          const ctx = canvas.getContext('2d');
-          if (!ctx) {
-            reject(new Error('Could not get canvas context'));
-            return;
-          }
-          
-          ctx.drawImage(img, 0, 0, width, height);
-          
-          // Start with high quality and reduce if needed to fit under a safe limit
-          // Since we support up to 5 images, each should be around 150-180KB max
-          let quality = 0.7;
-          let dataUrl = canvas.toDataURL('image/jpeg', quality);
-          
-          // Target ~180KB per image (180,000 bytes)
-          while (dataUrl.length > 180000 && quality > 0.1) {
-            quality -= 0.1;
-            dataUrl = canvas.toDataURL('image/jpeg', quality);
-          }
-          
-          resolve(dataUrl);
-        };
-        img.src = e.target?.result as string;
-      };
-      reader.onerror = reject;
-      reader.readAsDataURL(file);
-    });
-  };
 
   // Sync state when marker changes (e.g. background update)
   React.useEffect(() => {
@@ -141,21 +88,21 @@ export const PlantPopup: React.FC<PlantPopupProps> = ({ marker, onSave, onDelete
         return;
       }
 
-      setIsResizing(true);
+      setIsUploading(true);
       setError(null);
       
       try {
-        const resizedDataUrl = await resizeImage(file);
+        const cloudUrl = await uploadImage(file);
         if (!imageUrl) {
-          setImageUrl(resizedDataUrl);
+          setImageUrl(cloudUrl);
         } else {
-          setImages(prev => [...prev, { url: resizedDataUrl }]);
+          setImages(prev => [...prev, { url: cloudUrl }]);
         }
       } catch (err) {
-        console.error("Resizing failed:", err);
-        setError("Failed to process image. Please try another one.");
+        console.error("Upload failed:", err);
+        setError(err instanceof Error ? err.message : "Failed to upload image. Please check your connection.");
       } finally {
-        setIsResizing(false);
+        setIsUploading(false);
       }
     }
   };
@@ -184,6 +131,8 @@ export const PlantPopup: React.FC<PlantPopupProps> = ({ marker, onSave, onDelete
     setImages(newOrder.slice(1));
   };
 
+  const isConfigured = import.meta.env.VITE_CLOUDINARY_CLOUD_NAME && import.meta.env.VITE_CLOUDINARY_UPLOAD_PRESET;
+
   return (
     <>
       <motion.div
@@ -206,7 +155,7 @@ export const PlantPopup: React.FC<PlantPopupProps> = ({ marker, onSave, onDelete
                   <img 
                     src={allImages[currentImageIndex].url} 
                     alt={name} 
-                    className={`w-full h-full object-cover transition-opacity duration-300 ${isResizing ? 'opacity-50' : 'opacity-100'}`}
+                    className={`w-full h-full object-cover transition-opacity duration-300 ${isUploading ? 'opacity-50' : 'opacity-100'}`}
                     referrerPolicy="no-referrer"
                   />
                   {allImages[currentImageIndex].label && (
@@ -242,7 +191,7 @@ export const PlantPopup: React.FC<PlantPopupProps> = ({ marker, onSave, onDelete
                 </>
               )}
 
-              {isResizing && (
+              {isUploading && (
                 <div className="absolute inset-0 flex items-center justify-center bg-black/20">
                   <div className="w-8 h-8 border-2 border-white/30 border-t-white rounded-full animate-spin" />
                 </div>
@@ -257,7 +206,7 @@ export const PlantPopup: React.FC<PlantPopupProps> = ({ marker, onSave, onDelete
             </div>
           ) : (
             <div className="w-full h-full flex items-center justify-center text-gray-400 bg-gray-50">
-              {isResizing ? (
+              {isUploading ? (
                 <div className="w-12 h-12 border-4 border-emerald-500/20 border-t-emerald-500 rounded-full animate-spin" />
               ) : (
                 <Camera size={48} strokeWidth={1} />
@@ -319,7 +268,14 @@ export const PlantPopup: React.FC<PlantPopupProps> = ({ marker, onSave, onDelete
                 />
               </div>
               <div>
-                <label className="text-[10px] font-bold uppercase tracking-wider text-gray-400 mb-1 block">Images & Labels (Drag to reorder)</label>
+                <label className="text-[10px] font-bold uppercase tracking-wider text-gray-400 mb-1 block">Images & Labels (Cloudinary)</label>
+                {!isConfigured && (
+                  <div className="mb-2 p-3 bg-amber-50 border border-amber-200 rounded-xl">
+                    <p className="text-[10px] text-amber-700 leading-tight">
+                      <strong>Cloudinary not configured!</strong> Please add VITE_CLOUDINARY_CLOUD_NAME and VITE_CLOUDINARY_UPLOAD_PRESET to your environment variables.
+                    </p>
+                  </div>
+                )}
                 <div className="space-y-3">
                   <Reorder.Group 
                     axis="x" 
@@ -379,11 +335,22 @@ export const PlantPopup: React.FC<PlantPopupProps> = ({ marker, onSave, onDelete
                       </Reorder.Item>
                     ))}
                     <button
+                      disabled={!isConfigured || isUploading}
                       onClick={() => fileInputRef.current?.click()}
-                      className="shrink-0 w-24 h-24 rounded-xl border-2 border-dashed border-gray-200 flex flex-col items-center justify-center text-gray-400 hover:border-emerald-500 hover:text-emerald-500 transition-all"
+                      className={`shrink-0 w-24 h-24 rounded-xl border-2 border-dashed flex flex-col items-center justify-center transition-all ${
+                        !isConfigured || isUploading 
+                          ? 'bg-gray-50 border-gray-200 text-gray-300 cursor-not-allowed' 
+                          : 'border-gray-200 text-gray-400 hover:border-emerald-500 hover:text-emerald-500'
+                      }`}
                     >
-                      <PlusIcon size={24} />
-                      <span className="text-[8px] font-bold uppercase mt-1">Add Photo</span>
+                      {isUploading ? (
+                        <div className="w-6 h-6 border-2 border-emerald-500/20 border-t-emerald-500 rounded-full animate-spin" />
+                      ) : (
+                        <>
+                          <ImageUp size={24} />
+                          <span className="text-[8px] font-bold uppercase mt-1">Upload</span>
+                        </>
+                      )}
                     </button>
                   </Reorder.Group>
                   <input

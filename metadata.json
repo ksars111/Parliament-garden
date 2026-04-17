@@ -1,6 +1,6 @@
 {
   "name": "Parliament Garden Map (Firebase)",
-  "description": "A high-performance 2D map of the Parliament of Victoria for mapping and documenting garden plants, inspired by Felt.",
+  "description": "A high-performance garden mapping tool with Cloudinary image uploads and Firestore read optimization.",
   "requestFramePermissions": [
     "geolocation"
   ],

@@ -43,31 +43,13 @@ service cloud.firestore {
           (request.auth.token.email == "karlsarsfield@gmail.com" && request.auth.token.email_verified == true));
     }
 
-    match /test/connection {
+    match /garden/data {
       allow read: if true;
+      allow write: if isAuthenticated();
     }
 
-    match /markers/{markerId} {
+    match /test/connection {
       allow read: if true;
-      
-      // Allow create if authenticated and UID matches
-      allow create: if isAuthenticated() && 
-                      isValidMarker(request.resource.data) && 
-                      request.resource.data.id == markerId &&
-                      request.resource.data.uid == request.auth.uid;
-      
-      // Allow update if authenticated. 
-      // We ensure the internal ID matches the document ID and doesn't change.
-      // We also ensure the original author UID and createdAt timestamp are preserved.
-      allow update: if isAuthenticated() && 
-                      isValidMarker(request.resource.data) &&
-                      request.resource.data.id == markerId &&
-                      request.resource.data.id == resource.data.id &&
-                      request.resource.data.uid == resource.data.uid &&
-                      request.resource.data.createdAt == resource.data.createdAt;
-      
-      allow delete: if isAuthenticated() && 
-                      (request.auth.uid == resource.data.uid || isAdmin());
     }
 
     match /{path=**} {

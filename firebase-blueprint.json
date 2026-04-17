@@ -19,9 +19,17 @@
     }
   },
   "firestore": {
-    "/markers/{markerId}": {
-      "schema": "PlantMarker",
-      "description": "Collection of plant markers."
+    "/garden/data": {
+      "schema": {
+        "type": "object",
+        "properties": {
+          "markers": {
+            "type": "array",
+            "items": { "$ref": "#/entities/PlantMarker" }
+          }
+        }
+      },
+      "description": "Single document containing all garden markers for read optimization."
     },
     "/test/connection": {
       "schema": "object",

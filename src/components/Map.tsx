@@ -1,7 +1,7 @@
 import React, { useState, useCallback, useEffect, useRef } from 'react';
 import maplibregl from 'maplibre-gl';
 import 'maplibre-gl/dist/maplibre-gl.css';
-import { Leaf, Plus, Map as MapIcon, Info, List, Search, X, ChevronRight, Pencil, ShieldCheck, AlertCircle, Home, Rotate3d } from 'lucide-react';
+import { Leaf, Plus, Map as MapIcon, Info, List, Search, X, ChevronRight, Pencil, ShieldCheck, AlertCircle, Home, Rotate3d, Trash2 } from 'lucide-react';
 import { PlantMarker } from '../types';
 import { PlantPopup } from './PlantPopup';
 import { motion, AnimatePresence } from 'motion/react';
@@ -14,9 +14,12 @@ import {
   deleteDoc, 
   onSnapshot, 
   query, 
+  getDoc,
   OperationType,
   handleFirestoreError,
-  signInAnonymously
+  signInAnonymously,
+  arrayUnion,
+  arrayRemove
 } from '../firebase';
 
 // Parliament of Victoria, Melbourne
@@ -372,28 +375,77 @@ export const GardenMap: React.FC = () => {
       });
   }, []);
 
-  // Sync with Firestore
+  // Sync with Firestore / Shield API
   useEffect(() => {
-    const q = query(collection(db, 'markers'));
-    const unsubscribe = onSnapshot(q, (snapshot) => {
-      const newMarkers = snapshot.docs.map(doc => doc.data() as PlantMarker);
-      setMarkers(newMarkers);
-      setIsConnected(true);
-      setIsDataLoading(false);
-    }, (error) => {
-      setIsConnected(false);
-      setIsDataLoading(false);
-      
-      const errorMsg = error instanceof Error ? error.message : String(error);
-      if (errorMsg.includes('Quota limit exceeded') || errorMsg.includes('Quota exceeded')) {
-        setIsQuotaExceeded(true);
-      }
-      
-      handleFirestoreError(error, OperationType.LIST, 'markers');
-    });
+    let unsubscribe: (() => void) | null = null;
 
-    return () => unsubscribe();
-  }, []);
+    const fetchInitialData = async () => {
+      setIsDataLoading(true);
+      try {
+        // Try fetching from the Vercel Shield API first
+        // This is cached at the edge independently of Firestore reads
+        const response = await fetch('/api/garden');
+        if (response.ok) {
+          const data = await response.json();
+          setMarkers(data.markers || []);
+          setIsDataLoading(false);
+          setIsConnected(true);
+        } else {
+          throw new Error('API fetch failed');
+        }
+      } catch (err) {
+        console.warn('Vercel Shield API fetch failed, falling back to direct Firestore. Error:', err);
+        // Fallback to direct Firestore read if API fails
+        try {
+          const docRef = doc(db, 'garden', 'data');
+          const docSnap = await getDoc(docRef);
+          if (docSnap.exists()) {
+            setMarkers(docSnap.data().markers || []);
+          }
+          setIsConnected(true);
+        } catch (fsErr) {
+          const errorMsg = fsErr instanceof Error ? fsErr.message : String(fsErr);
+          if (errorMsg.includes('Quota limit exceeded') || errorMsg.includes('Quota exceeded')) {
+            setIsQuotaExceeded(true);
+          }
+        } finally {
+          setIsDataLoading(false);
+        }
+      }
+    };
+
+    // If the user is an admin/unlocked, we want real-time updates
+    if (isUnlocked) {
+      const docRef = doc(db, 'garden', 'data');
+      unsubscribe = onSnapshot(docRef, (docSnap) => {
+        if (docSnap.exists()) {
+          const data = docSnap.data();
+          setMarkers(data.markers || []);
+        } else {
+          setMarkers([]);
+        }
+        setIsConnected(true);
+        setIsDataLoading(false);
+      }, (error) => {
+        setIsConnected(false);
+        setIsDataLoading(false);
+        
+        const errorMsg = error instanceof Error ? error.message : String(error);
+        if (errorMsg.includes('Quota limit exceeded') || errorMsg.includes('Quota exceeded')) {
+          setIsQuotaExceeded(true);
+        }
+        
+        handleFirestoreError(error, OperationType.GET, 'garden/data');
+      });
+    } else {
+      // For general public views, just fetch once from the Shield API
+      fetchInitialData();
+    }
+
+    return () => {
+      if (unsubscribe) unsubscribe();
+    };
+  }, [isUnlocked]);
 
   // Keep selected marker in sync with updated list
   useEffect(() => {
@@ -440,13 +492,15 @@ export const GardenMap: React.FC = () => {
 
     try {
       console.log("Saving new marker:", newMarker.id);
-      await setDoc(doc(db, 'markers', newMarker.id), newMarker);
+      await setDoc(doc(db, 'garden', 'data'), {
+        markers: arrayUnion(newMarker)
+      }, { merge: true });
       setSaveError(null);
       return newMarker;
     } catch (e) {
       console.error("Failed to save new marker:", e);
       setSaveError("Failed to save. Check your connection.");
-      handleFirestoreError(e, OperationType.WRITE, `markers/${newMarker.id}`);
+      handleFirestoreError(e, OperationType.WRITE, 'garden/data');
       return null;
     }
   }, [canEdit]);
@@ -462,41 +516,90 @@ export const GardenMap: React.FC = () => {
 
   const updateMarker = useCallback(async (updated: PlantMarker) => {
     if (!canEdit || !auth.currentUser) return;
+    const oldMarker = markers.find(m => m.id === updated.id);
+    if (!oldMarker) return;
+
     try {
       console.log("Updating marker:", updated.id);
-      await setDoc(doc(db, 'markers', updated.id), updated, { merge: true });
+      const docRef = doc(db, 'garden', 'data');
+      
+      // Atomic update: remove old, add new
+      await setDoc(docRef, {
+        markers: arrayRemove(oldMarker)
+      }, { merge: true });
+      
+      await setDoc(docRef, {
+        markers: arrayUnion(updated)
+      }, { merge: true });
+
       setSelectedMarker(updated);
       setSaveError(null);
     } catch (e) {
       console.error("Failed to update marker:", e);
       setSaveError("Failed to update. Check your connection.");
-      handleFirestoreError(e, OperationType.WRITE, `markers/${updated.id}`);
+      handleFirestoreError(e, OperationType.WRITE, 'garden/data');
     }
-  }, [canEdit]);
+  }, [canEdit, markers]);
 
   const updatePosition = useCallback(async (updated: PlantMarker) => {
     if (!canEdit || !auth.currentUser) return;
+    const oldMarker = markers.find(m => m.id === updated.id);
+    if (!oldMarker) return;
+
     try {
-      await setDoc(doc(db, 'markers', updated.id), updated, { merge: true });
+      const docRef = doc(db, 'garden', 'data');
+      await setDoc(docRef, {
+        markers: arrayRemove(oldMarker)
+      }, { merge: true });
+      
+      await setDoc(docRef, {
+        markers: arrayUnion(updated)
+      }, { merge: true });
+      
       setSaveError(null);
     } catch (e) {
       setSaveError("Failed to move marker.");
-      handleFirestoreError(e, OperationType.WRITE, `markers/${updated.id}`);
+      handleFirestoreError(e, OperationType.WRITE, 'garden/data');
     }
-  }, [canEdit]);
+  }, [canEdit, markers]);
 
   const deleteMarker = useCallback(async (id: string) => {
     if (!canEdit || !auth.currentUser) return;
+    const markerToDelete = markers.find(m => m.id === id);
+    if (!markerToDelete) return;
     
     try {
-      await deleteDoc(doc(db, 'markers', id));
+      await setDoc(doc(db, 'garden', 'data'), {
+        markers: arrayRemove(markerToDelete)
+      }, { merge: true });
       setSelectedMarker(null);
       setSaveError(null);
     } catch (e) {
       setSaveError("Failed to delete marker.");
-      handleFirestoreError(e, OperationType.DELETE, `markers/${id}`);
+      handleFirestoreError(e, OperationType.DELETE, 'garden/data');
     }
-  }, [canEdit]);
+  }, [canEdit, markers]);
+
+  const clearAllPhotos = async () => {
+    if (!canEdit || !auth.currentUser || !window.confirm("Are you sure you want to delete ALL photos from ALL markers? This cannot be undone.")) return;
+    
+    try {
+      const cleanedMarkers = markers.map(m => ({
+        ...m,
+        imageUrl: '',
+        images: []
+      }));
+      
+      await setDoc(doc(db, 'garden', 'data'), {
+        markers: cleanedMarkers
+      });
+      setSaveError(null);
+      alert("All photos have been cleared successfully.");
+    } catch (e) {
+      setSaveError("Failed to clear photos.");
+      handleFirestoreError(e, OperationType.WRITE, 'garden/data');
+    }
+  };
 
   const resetView = () => {
     if (!mapRef.current) return;
@@ -686,8 +789,20 @@ export const GardenMap: React.FC = () => {
               className="w-64 max-h-[70vh] bg-zinc-900/90 backdrop-blur-xl border border-white/10 rounded-2xl shadow-2xl overflow-hidden flex flex-col"
             >
               <div className="p-4 border-b border-white/5 flex items-center justify-between">
-                <span className="text-[10px] font-bold uppercase tracking-widest text-emerald-500">Alphabetical List</span>
-                <span className="text-[10px] font-medium text-white/40">{markers.length} items</span>
+                <div className="flex flex-col">
+                  <span className="text-[10px] font-bold uppercase tracking-widest text-emerald-500">Alphabetical List</span>
+                  <span className="text-[10px] font-medium text-white/40">{markers.length} items</span>
+                </div>
+                {canEdit && markers.some(m => m.imageUrl || (m.images && m.images.length > 0)) && (
+                  <button
+                    onClick={clearAllPhotos}
+                    className="p-1.5 hover:bg-red-500/10 text-red-500/60 hover:text-red-500 rounded-lg transition-all active:scale-90 flex items-center gap-1.5 group"
+                    title="Delete ALL marker photos"
+                  >
+                    <Trash2 size={14} />
+                    <span className="text-[8px] font-bold uppercase hidden group-hover:inline">Clear All</span>
+                  </button>
+                )}
               </div>
               
               <div className="overflow-y-auto custom-scrollbar p-2">
