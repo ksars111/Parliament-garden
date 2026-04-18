@@ -31,6 +31,7 @@ service cloud.firestore {
              data.latitude is number &&
              data.longitude is number &&
              data.name is string && data.name.size() < 500 &&
+             (!('botanicalName' in data) || (data.botanicalName is string && data.botanicalName.size() < 500)) &&
              (!('description' in data) || (data.description is string && data.description.size() < 10000)) &&
              (!('imageUrl' in data) || (data.imageUrl is string && data.imageUrl.size() < 1048576)) &&
              data.createdAt is number &&

@@ -9,6 +9,7 @@ export interface PlantMarker {
   latitude: number;
   longitude: number;
   name: string;
+  botanicalName?: string;
   description: string;
   imageUrl: string;
   imageLabel?: string;

@@ -10,6 +10,7 @@
         "latitude": { "type": "number", "description": "The latitude of the plant." },
         "longitude": { "type": "number", "description": "The longitude of the plant." },
         "name": { "type": "string", "description": "The name of the plant." },
+        "botanicalName": { "type": "string", "description": "The latin botanical name of the plant." },
         "description": { "type": "string", "description": "The description of the plant." },
         "imageUrl": { "type": "string", "description": "The URL or base64 data of the plant's image." },
         "createdAt": { "type": "number", "description": "The timestamp when the marker was created." },

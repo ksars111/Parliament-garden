@@ -14,6 +14,7 @@ interface PlantPopupProps {
 
 export const PlantPopup: React.FC<PlantPopupProps> = ({ marker, onSave, onDelete, onClose, canEdit = false }) => {
   const [name, setName] = useState(marker.name);
+  const [botanicalName, setBotanicalName] = useState(marker.botanicalName || '');
   const [description, setDescription] = useState(marker.description);
   const [imageUrl, setImageUrl] = useState(marker.imageUrl);
   const [imageLabel, setImageLabel] = useState(marker.imageLabel || '');
@@ -42,6 +43,7 @@ export const PlantPopup: React.FC<PlantPopupProps> = ({ marker, onSave, onDelete
   // Sync state when marker changes (e.g. background update)
   React.useEffect(() => {
     setName(marker.name);
+    setBotanicalName(marker.botanicalName || '');
     setDescription(marker.description);
     setImageUrl(marker.imageUrl);
     setImageLabel(marker.imageLabel || '');
@@ -56,6 +58,7 @@ export const PlantPopup: React.FC<PlantPopupProps> = ({ marker, onSave, onDelete
     // Skip if values haven't changed from the prop to avoid loops
     if (
       name === marker.name &&
+      botanicalName === (marker.botanicalName || '') &&
       description === marker.description &&
       imageUrl === marker.imageUrl &&
       imageLabel === (marker.imageLabel || '') &&
@@ -73,7 +76,7 @@ export const PlantPopup: React.FC<PlantPopupProps> = ({ marker, onSave, onDelete
     }
 
     saveTimeoutRef.current = setTimeout(() => {
-      onSave({ ...marker, name, description, imageUrl, imageLabel, images, type });
+      onSave({ ...marker, name, botanicalName, description, imageUrl, imageLabel, images, type });
       setIsSaving(false);
     }, 1000); // 1 second debounce
 
@@ -82,7 +85,7 @@ export const PlantPopup: React.FC<PlantPopupProps> = ({ marker, onSave, onDelete
         clearTimeout(saveTimeoutRef.current);
       }
     };
-  }, [name, description, imageUrl, imageLabel, images, type, marker, onSave, canEdit]);
+  }, [name, botanicalName, description, imageUrl, imageLabel, images, type, marker, onSave, canEdit]);
 
   // Reset zoom when switching images
   React.useEffect(() => {
@@ -356,6 +359,16 @@ export const PlantPopup: React.FC<PlantPopupProps> = ({ marker, onSave, onDelete
                 />
               </div>
               <div>
+                <label className="text-[10px] font-bold uppercase tracking-wider text-gray-400 mb-1 block">Botanical Name (Latin)</label>
+                <input
+                  type="text"
+                  value={botanicalName}
+                  onChange={(e) => setBotanicalName(e.target.value)}
+                  className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-all text-sm italic"
+                  placeholder="e.g. Magnolia grandiflora"
+                />
+              </div>
+              <div>
                 <label className="text-[10px] font-bold uppercase tracking-wider text-gray-400 mb-1 block">Description</label>
                 <textarea
                   value={description}
@@ -495,16 +508,33 @@ export const PlantPopup: React.FC<PlantPopupProps> = ({ marker, onSave, onDelete
           ) : (
             <div className="space-y-3">
               <div className="flex items-center justify-between">
-                <h3 className="text-lg font-semibold text-gray-900 leading-tight">{name || 'Unnamed Plant'}</h3>
+                <div>
+                  <h3 className="text-lg font-semibold text-gray-900 leading-tight">{name || 'Unnamed Plant'}</h3>
+                  {botanicalName && (
+                    <p className="text-sm text-gray-500 italic mt-0.5">{botanicalName}</p>
+                  )}
+                </div>
                 <span className={`text-[10px] font-bold uppercase tracking-widest px-2 py-1 rounded-md ${type === 'tree' ? 'bg-green-100 text-green-700' : 'bg-pink-100 text-pink-600'}`}>
                   {type}
                 </span>
               </div>
-              <div className="mt-1 max-h-48 overflow-y-auto pr-2 custom-scrollbar">
-                  <p className="text-sm text-gray-600 leading-relaxed whitespace-pre-wrap">
-                    {description || 'No description provided yet.'}
-                  </p>
-                </div>
+              <div className="mt-1">
+                <p className="text-sm text-gray-600 leading-relaxed whitespace-pre-wrap">
+                  {description ? (
+                    description.length > 70 ? (
+                      <>
+                        {description.substring(0, 70)}...
+                        <button 
+                          onClick={() => setIsModalOpen(true)}
+                          className="text-emerald-500 font-bold ml-1 hover:text-emerald-600 transition-colors"
+                        >
+                          show more
+                        </button>
+                      </>
+                    ) : description
+                  ) : 'No description provided yet.'}
+                </p>
+              </div>
                 <div className="pt-2 border-t border-gray-100" />
             </div>
           )}
@@ -601,7 +631,10 @@ export const PlantPopup: React.FC<PlantPopupProps> = ({ marker, onSave, onDelete
                 <div className="flex justify-between items-start mb-6">
                   <div>
                     <h2 className="text-3xl font-bold text-gray-900 leading-tight">{name || 'Unnamed Plant'}</h2>
-                    <span className={`inline-block mt-2 text-xs font-bold uppercase tracking-widest px-3 py-1 rounded-full ${marker.type === 'tree' ? 'bg-green-100 text-green-700' : 'bg-pink-100 text-pink-600'}`}>
+                    {botanicalName && (
+                      <p className="text-xl text-gray-500 italic mt-1">{botanicalName}</p>
+                    )}
+                    <span className={`inline-block mt-4 text-xs font-bold uppercase tracking-widest px-3 py-1 rounded-full ${marker.type === 'tree' ? 'bg-green-100 text-green-700' : 'bg-pink-100 text-pink-600'}`}>
                       {marker.type}
                     </span>
                   </div>

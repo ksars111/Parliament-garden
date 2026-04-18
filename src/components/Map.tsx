@@ -629,6 +629,7 @@ export const GardenMap: React.FC = () => {
       latitude: lngLat.lat,
       longitude: lngLat.lng,
       name: 'New Tree',
+      botanicalName: '',
       description: '',
       imageUrl: '',
       createdAt: Date.now(),
