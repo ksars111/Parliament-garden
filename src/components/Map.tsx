@@ -48,6 +48,9 @@ interface MapComponentProps {
   isDataLoading?: boolean;
 }
 
+const TREE_ICON = `<svg viewBox="0 0 24 24" width="22" height="22" fill="#22c55e" xmlns="http://www.w3.org/2000/svg"><path stroke="white" stroke-width="1.2" stroke-linejoin="round" d="M19,11.5c0-2.2-1.8-4-4-4c-0.1,0-0.2,0-0.3,0c-0.6-1.5-2.1-2.6-3.8-2.6c-2.3,0-4.2,1.9-4.2,4.2c0,0.1,0,0.2,0,0.3c-0.9,0.5-1.5,1.5-1.5,2.6c0,1.7,1.4,3.1,3.1,3.1c0.1,0,0.2,0,0.3,0v3.8h1.4V15h2v4h1.4v-4.1c1.7-0.1,3.1-1.5,3.1-3.1c0-1.1-0.6-2.1-1.5-2.6Z"/></svg>`;
+const PLANT_ICON = `<svg viewBox="0 0 24 24" width="18" height="18" fill="#f472b6" xmlns="http://www.w3.org/2000/svg"><path stroke="white" stroke-width="1.2" stroke-linejoin="round" d="M12 12m-3 0a3 3 0 1 0 6 0a3 3 0 1 0 -6 0 M12 6a3 3 0 1 0 0 -6a3 3 0 1 0 0 6 M12 18a3 3 0 1 0 0 -6a3 3 0 1 0 0 6 M18 12a3 3 0 1 0 6 0a3 3 0 1 0 -6 0 M6 12a3 3 0 1 0 6 0a3 3 0 1 0 -6 0" /></svg>`;
+
 const MapComponent: React.FC<MapComponentProps> = ({ 
   markers, 
   onMarkerClick, 
@@ -63,7 +66,7 @@ const MapComponent: React.FC<MapComponentProps> = ({
 }) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const [isMapLoaded, setIsMapLoaded] = useState(false);
-  const [showLabels, setShowLabels] = useState(INITIAL_ZOOM > 20.5);
+  const [showLabels, setShowLabels] = useState(INITIAL_ZOOM > 16.5);
   const [displayZoom, setDisplayZoom] = useState(INITIAL_ZOOM);
   const markersLayerRef = useRef<Record<string, maplibregl.Marker>>({});
   const rafRef = useRef<number | null>(null);
@@ -80,22 +83,104 @@ const MapComponent: React.FC<MapComponentProps> = ({
       
       const bounds = map.getBounds();
       
-      Object.values(markersLayerRef.current).forEach((marker) => {
+      // Pass 1: Positioning, Z-Indexing, and Visibility check
+      const visibleMarkers: { 
+        id: string; 
+        el: HTMLElement; 
+        label: HTMLElement | null; 
+        icon: HTMLElement | null;
+        iconRect?: DOMRect;
+        zIndex: number;
+      }[] = [];
+
+      Object.entries(markersLayerRef.current).forEach(([id, marker]) => {
         const lngLat = marker.getLngLat();
+        const el = marker.getElement();
         
-        // Culling: Only update markers in or near viewport
         if (!bounds.contains(lngLat)) {
-          marker.getElement().style.display = 'none';
+          el.style.display = 'none';
           return;
         }
         
-        marker.getElement().style.display = 'block';
+        el.style.display = 'block';
         const point = map.project(lngLat);
-        // Higher Y (bottom of screen) = closer to camera = higher z-index
-        marker.getElement().style.zIndex = Math.round(point.y).toString();
+        const zIndex = Math.round(point.y);
+        el.style.zIndex = zIndex.toString();
+
+        visibleMarkers.push({
+          id,
+          el,
+          zIndex,
+          label: el.querySelector('.marker-label') as HTMLElement,
+          icon: el.querySelector('div:first-child') as HTMLElement
+        });
+      });
+
+      // Sort by priority (closest to camera = higher Y/ZIndex)
+      visibleMarkers.sort((a, b) => b.zIndex - a.zIndex);
+
+      const occupiedRects: DOMRect[] = [];
+      
+      // Pass 2: Collect all icon rects (icons always take priority over labels)
+      visibleMarkers.forEach(vm => {
+        if (vm.icon) {
+          vm.iconRect = vm.icon.getBoundingClientRect();
+        }
+      });
+
+      // Pass 3: Check label collisions
+      visibleMarkers.forEach(vm => {
+        if (!vm.label) return;
+
+        // Base zoom threshold check
+        if (!showLabels) {
+          vm.label.classList.add('occluded');
+          return;
+        }
+
+        const labelRect = vm.label.getBoundingClientRect();
+        
+        // Helper to check intersection with a small margin
+        const intersects = (r1: DOMRect, r2: DOMRect) => {
+          const margin = 2;
+          return !(
+            r1.right + margin < r2.left - margin ||
+            r1.left - margin > r2.right + margin ||
+            r1.bottom + margin < r2.top - margin ||
+            r1.top - margin > r2.bottom + margin
+          );
+        };
+
+        let isColliding = false;
+
+        // Check against other icons (except its own parent icon)
+        for (const other of visibleMarkers) {
+          if (other.id === vm.id || !other.iconRect) continue;
+          if (intersects(labelRect, other.iconRect)) {
+            isColliding = true;
+            break;
+          }
+        }
+
+        // Check against already placed labels
+        if (!isColliding) {
+          for (const placedRect of occupiedRects) {
+            if (intersects(labelRect, placedRect)) {
+              isColliding = true;
+              break;
+            }
+          }
+        }
+
+        if (isColliding) {
+          vm.label.classList.add('occluded');
+        } else {
+          vm.label.classList.remove('occluded');
+          occupiedRects.push(labelRect);
+        }
       });
     });
-  }, [mapRef]);
+  }, [mapRef, showLabels]);
 
   // Initialize Map
   useEffect(() => {
@@ -137,7 +222,7 @@ const MapComponent: React.FC<MapComponentProps> = ({
       setIsMapLoaded(true);
       if (onMapLoad) onMapLoad(true);
       const zoom = map.getZoom();
-      setShowLabels(zoom > 20.5);
+      setShowLabels(zoom > 16.5);
       setDisplayZoom(zoom);
       updateMarkerZIndices();
     });
@@ -147,7 +232,7 @@ const MapComponent: React.FC<MapComponentProps> = ({
       
       // Update labels state only on threshold crossing
       setShowLabels(prev => {
-        const next = zoom > 20.5;
+        const next = zoom > 16.5;
         return prev === next ? prev : next;
       });
 
@@ -206,27 +291,12 @@ const MapComponent: React.FC<MapComponentProps> = ({
         }
 
         if (inner) {
-          inner.className = `w-10 h-10 ${marker.type === 'tree' ? 'bg-emerald-400' : 'bg-lime-400'} rounded-full flex items-center justify-center shadow-lg border-2 border-white/40 overflow-hidden transition-transform duration-200 hover:scale-110 active:scale-95`;
-          
-          // Update image or icon
-          const img = inner.querySelector('img');
-          if (marker.imageUrl) {
-            if (img) {
-              if (img.src !== marker.imageUrl) img.src = marker.imageUrl;
-            } else {
-              inner.innerHTML = '';
-              const newImg = document.createElement('img');
-              newImg.src = marker.imageUrl;
-              newImg.className = 'w-full h-full object-cover';
-              newImg.referrerPolicy = 'no-referrer';
-              inner.appendChild(newImg);
-            }
-          } else if (img || inner.querySelector('svg')) {
-            // If no image, ensure fallback icon is shown
-            if (img || !inner.querySelector('svg')) {
-              inner.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 20A7 7 0 0 1 9.8 6.1C15.5 5 17 4.48 19 2c1 2 2 4.18 2 8 0 5.5-4.78 10-10 10Z"/><path d="M2 21c0-3 1.85-5.36 5.08-6C9.5 14.52 12 13 13 12"/></svg>`;
-            }
-          }
+          inner.className = `flex items-center justify-center transition-transform duration-200 hover:scale-125 active:scale-95`;
+          inner.innerHTML = marker.type === 'tree' ? TREE_ICON : PLANT_ICON;
+        }
+
+        if (label) {
+          label.textContent = marker.name;
         }
       } else {
         // Create custom marker element
@@ -235,25 +305,16 @@ const MapComponent: React.FC<MapComponentProps> = ({
         
         // Inner wrapper for visual style and hover effects
         const inner = document.createElement('div');
-        inner.className = `w-10 h-10 ${marker.type === 'tree' ? 'bg-emerald-400' : 'bg-lime-400'} rounded-full flex items-center justify-center shadow-lg border-2 border-white/40 overflow-hidden transition-transform duration-200 hover:scale-110 active:scale-95`;
+        inner.className = `flex items-center justify-center transition-transform duration-200 hover:scale-125 active:scale-95`;
+        inner.innerHTML = marker.type === 'tree' ? TREE_ICON : PLANT_ICON;
         el.appendChild(inner);
         
         // Add label
         const label = document.createElement('div');
-        label.className = 'marker-label absolute left-1/2 -translate-x-1/2 top-full mt-2 px-2 py-0.5 bg-black/60 backdrop-blur-md rounded text-white text-[10px] font-medium whitespace-nowrap pointer-events-none shadow-sm border border-white/10 z-50';
+        label.className = 'marker-label absolute left-full ml-1 tracking-tight top-1/2 -translate-y-1/2 text-white text-[11px] font-bold whitespace-nowrap pointer-events-none drop-shadow-[0_1px_1px_rgba(0,0,0,1)] z-50 transition-all duration-300';
+        label.style.textShadow = '0 0 3px rgba(0,0,0,0.9), 1px 1px 2px rgba(0,0,0,1)';
         label.textContent = marker.name;
         el.appendChild(label);
-        
-        if (marker.imageUrl) {
-          const img = document.createElement('img');
-          img.src = marker.imageUrl;
-          img.className = 'w-full h-full object-cover';
-          img.referrerPolicy = 'no-referrer';
-          inner.appendChild(img);
-        } else {
-          // Fallback icon (simplified for DOM)
-          inner.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 20A7 7 0 0 1 9.8 6.1C15.5 5 17 4.48 19 2c1 2 2 4.18 2 8 0 5.5-4.78 10-10 10Z"/><path d="M2 21c0-3 1.85-5.36 5.08-6C9.5 14.52 12 13 13 12"/></svg>`;
-        }
 
         const newMarker = new maplibregl.Marker({
           element: el,
@@ -315,12 +376,14 @@ const MapComponent: React.FC<MapComponentProps> = ({
       <style>{`
         .marker-label {
           opacity: 0;
-          transform: translateY(-4px);
-          transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+          transition: opacity 0.3s cubic-bezier(0.4, 0, 0.2, 1);
         }
         .show-labels .marker-label {
           opacity: 1;
-          transform: translateY(0);
+        }
+        .marker-label.occluded {
+          opacity: 0 !important;
+          pointer-events: none;
         }
       `}</style>
 
@@ -875,7 +938,13 @@ export const GardenMap: React.FC = () => {
                         onClick={() => zoomToMarker(marker)}
                         className="w-full text-left p-3 hover:bg-white/5 rounded-xl transition-colors group flex items-center gap-3"
                       >
-                        <div className={`w-2 h-2 rounded-full shrink-0 ${marker.type === 'tree' ? 'bg-emerald-400 shadow-[0_0_8px_rgba(52,211,153,0.5)]' : 'bg-lime-400 shadow-[0_0_8px_rgba(163,230,53,0.5)]'}`} />
+                        <div className={`w-3 h-3 flex items-center justify-center shrink-0 ${marker.type === 'tree' ? 'text-green-500' : 'text-pink-400'}`}>
+                          {marker.type === 'tree' ? (
+                            <div dangerouslySetInnerHTML={{ __html: TREE_ICON.replace('width="22"', 'width="12"').replace('height="22"', 'height="12"') }} />
+                          ) : (
+                            <div dangerouslySetInnerHTML={{ __html: PLANT_ICON.replace('width="18"', 'width="12"').replace('height="18"', 'height="12"') }} />
+                          )}
+                        </div>
                         <div className="flex-1 overflow-hidden">
                           <div className="text-white text-xs font-medium truncate group-hover:text-emerald-400 transition-colors">
                             {marker.name}
