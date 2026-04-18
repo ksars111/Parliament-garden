@@ -193,13 +193,19 @@ const MapComponent: React.FC<MapComponentProps> = ({
         sources: {
           'google-satellite': {
             type: 'raster',
-            tiles: ['https://mt1.google.com/vt/lyrs=s&x={x}&y={y}&z={z}'],
-            tileSize: 256
+            tiles: [
+              'https://mt0.google.com/vt/lyrs=s&hl=en&x={x}&y={y}&z={z}',
+              'https://mt1.google.com/vt/lyrs=s&hl=en&x={x}&y={y}&z={z}',
+              'https://mt2.google.com/vt/lyrs=s&hl=en&x={x}&y={y}&z={z}',
+              'https://mt3.google.com/vt/lyrs=s&hl=en&x={x}&y={y}&z={z}'
+            ],
+            tileSize: 256,
+            attribution: 'Map data &copy; Google'
           }
         },
         layers: [
           {
-            id: 'google-satellite',
+            id: 'google-satellite-layer',
             type: 'raster',
             source: 'google-satellite',
             minzoom: 0,
