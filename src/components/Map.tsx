@@ -48,8 +48,8 @@ interface MapComponentProps {
   isDataLoading?: boolean;
 }
 
-const TREE_ICON = `<svg viewBox="0 0 24 24" width="24" height="24" fill="#22c55e" xmlns="http://www.w3.org/2000/svg"><path stroke="white" stroke-width="1.2" stroke-linejoin="round" d="M19.2,11.5c0-2.2-1.8-4-4-4c-0.1,0-0.2,0-0.3,0c-0.6-1.5-2.1-2.6-3.8-2.6c-2.3,0-4.2,1.9-4.2,4.2c0,0.1,0,0.2,0,0.3c-0.9,0.5-1.5,1.5-1.5,2.6c0,1.7,1.4,3.1,3.1,3.1h0.2l-1,4.9h8l-1-4.9h0.4c1.7,0,3.1-1.4,3.1-3.1Z M12,15l-1.5-3h3L12,15Z M10,12l-1-1.5h1L10,12Z M14,12l1-1.5h-1L14,12Z"/></svg>`;
-const PLANT_ICON = `<svg viewBox="0 0 24 24" width="20" height="20" fill="#f472b6" xmlns="http://www.w3.org/2000/svg"><path stroke="white" stroke-width="1.2" stroke-linejoin="round" d="M12,22c0,0-3.5-10-1-18c2.5,8,1,18,1,18Z M12,22c0,0-7-8-3-14c4,6,3,14,3,14Z M12,22c0,0,7-8,3-14c-4,6-3,14-3,14Z M12,22c0,0-9-5-5-10c4,5,5,10,5,10Z M12,22c0,0,9-5,5-10c-4,5-5,10-5,10Z"/></svg>`;
+const TREE_ICON = `<svg viewBox="0 0 24 24" width="24" height="24" fill="#22c55e" xmlns="http://www.w3.org/2000/svg"><path d="M19.2,11.5c0-2.2-1.8-4-4-4c-0.1,0-0.2,0-0.3,0c-0.6-1.5-2.1-2.6-3.8-2.6c-2.3,0-4.2,1.9-4.2,4.2c0,0.1,0,0.2,0,0.3c-0.9,0.5-1.5,1.5-1.5,2.6c0,1.7,1.4,3.1,3.1,3.1h0.2l-1,4.9h8l-1-4.9h0.4c1.7,0,3.1-1.4,3.1-3.1Z M12,15l-1.5-3h3L12,15Z M10,12l-1-1.5h1L10,12Z M14,12l1-1.5h-1L14,12Z"/></svg>`;
+const PLANT_ICON = `<svg viewBox="0 0 24 24" width="20" height="20" fill="#f472b6" xmlns="http://www.w3.org/2000/svg"><path d="M12,22c0,0-3.5-10-1-18c2.5,8,1,18,1,18Z M12,22c0,0-7-8-3-14c4,6,3,14,3,14Z M12,22c0,0,7-8,3-14c-4,6-3,14-3,14Z M12,22c0,0-9-5-5-10c4,5,5,10,5,10Z M12,22c0,0,9-5,5-10c-4,5-5,10-5,10Z"/></svg>`;
 
 const MapComponent: React.FC<MapComponentProps> = ({ 
   markers, 
@@ -291,7 +291,7 @@ const MapComponent: React.FC<MapComponentProps> = ({
         }
 
         if (inner) {
-          inner.className = `flex items-center justify-center transition-transform duration-200 hover:scale-125 active:scale-95`;
+          inner.className = `flex items-center justify-center transition-transform duration-200 hover:scale-125 active:scale-95 drop-shadow-[0_1px_2px_rgba(0,0,0,1)]`;
           inner.innerHTML = marker.type === 'tree' ? TREE_ICON : PLANT_ICON;
         }
 
@@ -305,7 +305,7 @@ const MapComponent: React.FC<MapComponentProps> = ({
         
         // Inner wrapper for visual style and hover effects
         const inner = document.createElement('div');
-        inner.className = `flex items-center justify-center transition-transform duration-200 hover:scale-125 active:scale-95`;
+        inner.className = `flex items-center justify-center transition-transform duration-200 hover:scale-125 active:scale-95 drop-shadow-[0_1px_2px_rgba(0,0,0,1)]`;
         inner.innerHTML = marker.type === 'tree' ? TREE_ICON : PLANT_ICON;
         el.appendChild(inner);
         
@@ -938,7 +938,7 @@ export const GardenMap: React.FC = () => {
                         onClick={() => zoomToMarker(marker)}
                         className="w-full text-left p-3 hover:bg-white/5 rounded-xl transition-colors group flex items-center gap-3"
                       >
-                        <div className={`w-3 h-3 flex items-center justify-center shrink-0 ${marker.type === 'tree' ? 'text-green-500' : 'text-pink-400'}`}>
+                        <div className={`w-3 h-3 flex items-center justify-center shrink-0 ${marker.type === 'tree' ? 'text-green-500' : 'text-pink-400'} drop-shadow-[0_1px_1px_rgba(0,0,0,0.5)]`}>
                           {marker.type === 'tree' ? (
                             <div dangerouslySetInnerHTML={{ __html: TREE_ICON.replace('width="24"', 'width="12"').replace('height="24"', 'height="12"') }} />
                           ) : (
