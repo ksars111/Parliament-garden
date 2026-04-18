@@ -1,8 +1,8 @@
 import React, { useState, useCallback, useEffect, useRef } from 'react';
 import maplibregl from 'maplibre-gl';
 import 'maplibre-gl/dist/maplibre-gl.css';
-import { Leaf, Plus, Map as MapIcon, Info, List, Search, X, ChevronRight, Pencil, ShieldCheck, AlertCircle, Home, Rotate3d, Trash2 } from 'lucide-react';
-import { PlantMarker } from '../types';
+import { Leaf, Plus, Map as MapIcon, Info, List, Search, X, ChevronRight, Pencil, ShieldCheck, AlertCircle, Home, Rotate3d, Trash2, Undo, History, Camera, Trash, Clock } from 'lucide-react';
+import { PlantMarker, Snapshot } from '../types';
 import { PlantPopup } from './PlantPopup';
 import { motion, AnimatePresence } from 'motion/react';
 import { 
@@ -39,7 +39,7 @@ interface MapComponentProps {
   onMarkerClick: (marker: PlantMarker) => void;
   selectedMarker: PlantMarker | null;
   onClosePopup: () => void;
-  onUpdatePosition: (updated: PlantMarker) => void;
+  onUpdatePosition: (updated: PlantMarker, skipUndo?: boolean) => void;
   deleteMarker: (id: string) => void;
   mapRef: React.MutableRefObject<maplibregl.Map | null>;
   canEdit?: boolean;
@@ -421,6 +421,10 @@ export const GardenMap: React.FC = () => {
   const [showWelcome, setShowWelcome] = useState(false);
   const [showInstructions, setShowInstructions] = useState(false);
   const [showLegend, setShowLegend] = useState(false);
+  const [lastMove, setLastMove] = useState<{ id: string; prevPos: { lng: number; lat: number } } | null>(null);
+  const [snapshots, setSnapshots] = useState<Snapshot[]>([]);
+  const [showSnapshots, setShowSnapshots] = useState(false);
+  const [isSavingSnapshot, setIsSavingSnapshot] = useState(false);
   const legendRef = useRef<HTMLDivElement>(null);
 
   // Close legend on click away
@@ -568,10 +572,24 @@ export const GardenMap: React.FC = () => {
       fetchInitialData();
     }
 
+    // Sync snapshots for the user
+    let unsubscribeSnapshots: (() => void) | null = null;
+    if (isUnlocked && auth.currentUser) {
+      const q = query(collection(db, 'snapshots'));
+      unsubscribeSnapshots = onSnapshot(q, (snapshot) => {
+        const docs = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Snapshot));
+        setSnapshots(docs.sort((a, b) => b.createdAt - a.createdAt));
+      }, (error) => {
+        // Silent error for snapshots if it fails (likely rules)
+        console.warn("Snapshot sync failed:", error);
+      });
+    }
+
     return () => {
       if (unsubscribe) unsubscribe();
+      if (unsubscribeSnapshots) unsubscribeSnapshots();
     };
-  }, [isUnlocked]);
+  }, [isUnlocked, isAuthenticating]);
 
   // Keep selected marker in sync with updated list
   useEffect(() => {
@@ -592,6 +610,7 @@ export const GardenMap: React.FC = () => {
   const handleLockEditing = () => {
     setIsUnlocked(false);
     sessionStorage.removeItem('garden_unlocked');
+    setLastMove(null);
   };
 
   const canEdit = isUnlocked;
@@ -667,10 +686,17 @@ export const GardenMap: React.FC = () => {
     }
   }, [canEdit, markers]);
 
-  const updatePosition = useCallback(async (updated: PlantMarker) => {
+  const updatePosition = useCallback(async (updated: PlantMarker, skipUndo = false) => {
     if (!canEdit || !auth.currentUser) return;
     const oldMarker = markers.find(m => m.id === updated.id);
     if (!oldMarker) return;
+
+    if (!skipUndo) {
+      setLastMove({
+        id: updated.id,
+        prevPos: { lng: oldMarker.longitude, lat: oldMarker.latitude }
+      });
+    }
 
     try {
       const docRef = doc(db, 'garden', 'data');
@@ -689,6 +715,24 @@ export const GardenMap: React.FC = () => {
     }
   }, [canEdit, markers]);
 
+  const undoLastMove = useCallback(async () => {
+    if (!lastMove || !canEdit || !auth.currentUser) return;
+    
+    const marker = markers.find(m => m.id === lastMove.id);
+    if (!marker) {
+      setLastMove(null);
+      return;
+    }
+
+    await updatePosition({
+      ...marker,
+      longitude: lastMove.prevPos.lng,
+      latitude: lastMove.prevPos.lat
+    }, true);
+    
+    setLastMove(null);
+  }, [lastMove, canEdit, markers, updatePosition]);
+
   const deleteMarker = useCallback(async (id: string) => {
     if (!canEdit || !auth.currentUser) return;
     const markerToDelete = markers.find(m => m.id === id);
@@ -705,6 +749,51 @@ export const GardenMap: React.FC = () => {
       handleFirestoreError(e, OperationType.DELETE, 'garden/data');
     }
   }, [canEdit, markers]);
+
+  const createSnapshot = async () => {
+    if (!auth.currentUser || markers.length === 0) return;
+    setIsSavingSnapshot(true);
+    try {
+      const snapshotId = `snapshot_${Date.now()}`;
+      const newSnapshot: Snapshot = {
+        id: snapshotId,
+        uid: auth.currentUser.uid,
+        name: `Garden Backup (${new Date().toLocaleDateString()})`,
+        createdAt: Date.now(),
+        markers: markers
+      };
+      await setDoc(doc(db, 'snapshots', snapshotId), newSnapshot);
+      setSaveError(null);
+    } catch (e) {
+      console.error("Failed to create snapshot:", e);
+      setSaveError("Failed to save backup.");
+    } finally {
+      setIsSavingSnapshot(false);
+    }
+  };
+
+  const restoreSnapshot = async (snapshot: Snapshot) => {
+    if (!canEdit || !auth.currentUser || !window.confirm(`Restore "${snapshot.name}"? This will overwrite your current garden layout.`)) return;
+    
+    try {
+      await setDoc(doc(db, 'garden', 'data'), {
+        markers: snapshot.markers
+      });
+      setSaveError(null);
+      setShowSnapshots(false);
+    } catch (e) {
+      setSaveError("Failed to restore backup.");
+    }
+  };
+
+  const deleteSnapshot = async (id: string) => {
+    if (!auth.currentUser) return;
+    try {
+      await deleteDoc(doc(db, 'snapshots', id));
+    } catch (e) {
+      console.error("Failed to delete snapshot:", e);
+    }
+  };
 
   const clearAllPhotos = async () => {
     if (!canEdit || !auth.currentUser || !window.confirm("Are you sure you want to delete ALL photos from ALL markers? This cannot be undone.")) return;
@@ -867,14 +956,6 @@ export const GardenMap: React.FC = () => {
         ) : (
           <div className="flex flex-col gap-3">
             <button 
-              onClick={addMarkerAtCenter}
-              disabled={!isConnected}
-              className={`h-10 px-4 ${isConnected ? 'bg-emerald-500 hover:bg-emerald-600' : 'bg-gray-700 cursor-not-allowed'} backdrop-blur-md border border-emerald-500/30 rounded-full flex items-center gap-2 text-white transition-all active:scale-95 shadow-xl`}
-            >
-              <Plus size={18} strokeWidth={2} />
-              <span className="text-[10px] font-bold uppercase tracking-wider">Add New Tree</span>
-            </button>
-            <button 
               onClick={handleLockEditing}
               className="h-10 px-4 bg-white/5 hover:bg-white/10 backdrop-blur-md border border-white/10 rounded-full flex items-center gap-2 text-white/60 hover:text-white transition-all active:scale-95 shadow-lg"
             >
@@ -887,6 +968,13 @@ export const GardenMap: React.FC = () => {
             >
               <Info size={18} strokeWidth={1.5} />
               <span className="text-[10px] font-bold uppercase tracking-wider">Instructions</span>
+            </button>
+            <button 
+              onClick={() => setShowSnapshots(true)}
+              className="h-10 px-4 bg-white/5 hover:bg-white/10 backdrop-blur-md border border-white/10 rounded-full flex items-center gap-2 text-white/60 hover:text-white transition-all active:scale-95 shadow-lg"
+            >
+              <History size={18} strokeWidth={1.5} />
+              <span className="text-[10px] font-bold uppercase tracking-wider">Backups</span>
             </button>
           </div>
         )}
@@ -970,6 +1058,67 @@ export const GardenMap: React.FC = () => {
         </AnimatePresence>
       </div>
 
+      {/* Center Target Indicator (Edit Mode) */}
+      <AnimatePresence>
+        {canEdit && (
+          <motion.div 
+            initial={{ opacity: 0, scale: 0.5 }}
+            animate={{ opacity: 1, scale: 1 }}
+            exit={{ opacity: 0, scale: 0.5 }}
+            className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-[4000] pointer-events-none"
+          >
+            <div className="relative">
+              <div className="w-12 h-12 border-2 border-emerald-500/30 rounded-full flex items-center justify-center">
+                <div className="w-1 h-1 bg-emerald-500 rounded-full" />
+              </div>
+              <div className="absolute top-0 bottom-0 left-1/2 -translate-x-1/2 w-px h-12 bg-emerald-500/20" />
+              <div className="absolute left-0 right-0 top-1/2 -translate-y-1/2 h-px w-12 bg-emerald-500/20" />
+            </div>
+            <div className="absolute top-[calc(100%+8px)] left-1/2 -translate-x-1/2 whitespace-nowrap">
+              <span className="text-[8px] font-bold text-emerald-500 uppercase tracking-[0.2em] bg-black/40 backdrop-blur-sm px-2 py-0.5 rounded-full border border-emerald-500/20">
+                New Tree Placement
+              </span>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Primary Edit Actions (Bottom Center) */}
+      <AnimatePresence>
+        {canEdit && (
+          <div className="absolute bottom-10 left-1/2 -translate-x-1/2 z-[5000] flex flex-col items-center gap-4 w-full px-4 max-w-sm">
+            <div className="flex items-center gap-3">
+              {lastMove && (
+                <motion.button 
+                  initial={{ opacity: 0, x: 20 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  exit={{ opacity: 0, x: 20 }}
+                  onClick={undoLastMove}
+                  className="h-14 px-6 bg-zinc-900/90 hover:bg-zinc-800 backdrop-blur-xl border border-white/10 rounded-2xl flex items-center gap-3 text-white transition-all active:scale-95 shadow-2xl group"
+                >
+                  <Undo size={20} className="text-emerald-400 group-hover:rotate-[-20deg] transition-transform" />
+                  <span className="text-[11px] font-bold uppercase tracking-[0.15em]">Undo Move</span>
+                </motion.button>
+              )}
+              
+              <button 
+                onClick={addMarkerAtCenter}
+                disabled={!isConnected}
+                className={`h-16 px-10 ${isConnected ? 'bg-emerald-500 hover:bg-emerald-600 scale-105' : 'bg-gray-700 cursor-not-allowed opacity-50'} backdrop-blur-md rounded-[24px] flex items-center gap-4 text-white transition-all active:scale-95 shadow-[0_20px_50px_rgba(16,185,129,0.3)] group`}
+              >
+                <div className="w-8 h-8 bg-white/20 rounded-xl flex items-center justify-center group-hover:rotate-90 transition-transform duration-300">
+                  <Plus size={24} strokeWidth={3} />
+                </div>
+                <div className="flex flex-col items-start translate-y-0.5">
+                  <span className="text-[12px] font-black uppercase tracking-[0.2em] leading-none">Add New Tree</span>
+                  <span className="text-[9px] font-bold text-white/60 uppercase tracking-[0.1em] mt-1">Drops at Center</span>
+                </div>
+              </button>
+            </div>
+          </div>
+        )}
+      </AnimatePresence>
+
       {/* Bottom Right Controls */}
       <div className="absolute bottom-8 right-6 md:bottom-10 md:right-10 z-[2000] flex flex-col gap-3 mb-[env(safe-area-inset-bottom)] mr-[env(safe-area-inset-right)]">
         <button 
@@ -1010,32 +1159,39 @@ export const GardenMap: React.FC = () => {
                 </button>
               </div>
               
-              <div className="space-y-4 mb-8">
+              <div className="space-y-4 mb-8 max-h-[50vh] overflow-y-auto pr-2 custom-scrollbar">
                 <div className="p-4 bg-white/5 rounded-2xl border border-white/5">
-                  <h4 className="text-emerald-400 font-bold text-[10px] uppercase tracking-widest mb-2">Adding Plants</h4>
+                  <h4 className="text-emerald-400 font-bold text-[10px] uppercase tracking-widest mb-2">Adding Trees & Plants</h4>
                   <p className="text-gray-300 text-xs leading-relaxed">
-                    Click the <span className="text-emerald-400 font-bold">"Add New Tree"</span> button to drop a marker at the center of your screen.
+                    Click the <span className="text-emerald-400 font-bold">"Add New Tree"</span> button. A new marker will drop exactly at the center of your screen. 
                   </p>
                 </div>
 
                 <div className="p-4 bg-white/5 rounded-2xl border border-white/5">
-                  <h4 className="text-emerald-400 font-bold text-[10px] uppercase tracking-widest mb-2">Moving Markers</h4>
+                  <h4 className="text-emerald-400 font-bold text-[10px] uppercase tracking-widest mb-2">Moving & Reverting</h4>
                   <p className="text-gray-300 text-xs leading-relaxed">
-                    In edit mode, you can <span className="text-emerald-400 font-bold">click and drag</span> any marker on the map to reposition it.
+                    <span className="text-emerald-400 font-bold">Drag and drop</span> any icon to reposition it. If you move something by mistake, click the <span className="text-emerald-400 font-bold italic">"Undo Move"</span> button that appears in the sidebar.
+                  </p>
+                </div>
+
+                <div className="p-4 bg-white/5 rounded-2xl border border-white/5">
+                  <h4 className="text-emerald-400 font-bold text-[10px] uppercase tracking-widest mb-2">Backups & Restore</h4>
+                  <p className="text-gray-300 text-xs leading-relaxed">
+                    Use the <span className="text-emerald-400 font-bold">"Backups"</span> panel to save snapshots of your entire garden. You can restore an old backup at any time to undo major changes or deletions.
                   </p>
                 </div>
 
                 <div className="p-4 bg-white/5 rounded-2xl border border-white/5">
                   <h4 className="text-emerald-400 font-bold text-[10px] uppercase tracking-widest mb-2">Editing Details</h4>
                   <p className="text-gray-300 text-xs leading-relaxed">
-                    Click a marker to open its popup. You can change the name, description, and upload up to 5 photos.
+                    Click an icon to open its popup. You can change names, types, add descriptions, and upload up to 5 photos. <span className="text-emerald-400 font-bold">Drag photos</span> to reorder them; the first one is the "Main" display photo.
                   </p>
                 </div>
 
                 <div className="p-4 bg-white/5 rounded-2xl border border-white/5">
-                  <h4 className="text-emerald-400 font-bold text-[10px] uppercase tracking-widest mb-2">Photo Management</h4>
+                  <h4 className="text-emerald-400 font-bold text-[10px] uppercase tracking-widest mb-2">Navigation</h4>
                   <p className="text-gray-300 text-xs leading-relaxed">
-                    <span className="text-emerald-400 font-bold">Drag photos</span> in the edit view to reorder them. The first photo becomes the "Main" hero image.
+                    Use the bottom-right buttons to toggle between <span className="text-emerald-400 font-bold text-nowrap">Tilt View (3D)</span> and Top-down view, or to quickly jump back to the center of the garden.
                   </p>
                 </div>
               </div>
@@ -1046,6 +1202,103 @@ export const GardenMap: React.FC = () => {
               >
                 Got it, thanks!
               </button>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* Snapshots / Backups Popup */}
+      <AnimatePresence>
+        {showSnapshots && (
+          <div className="absolute inset-0 z-[9000] flex items-center justify-center p-4 bg-black/60 backdrop-blur-md">
+            <motion.div
+              initial={{ opacity: 0, scale: 0.9, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.9, y: 20 }}
+              className="bg-zinc-900 border border-white/10 p-8 rounded-[32px] shadow-2xl max-w-lg w-full relative overflow-hidden flex flex-col max-h-[80vh]"
+            >
+              <div className="flex items-center justify-between mb-8">
+                <div>
+                  <h2 className="text-2xl font-bold text-white tracking-tight">Garden Backups</h2>
+                  <p className="text-gray-400 text-xs mt-1">Revert to older versions of your garden map.</p>
+                </div>
+                <button 
+                  onClick={() => setShowSnapshots(false)}
+                  className="p-2 hover:bg-white/5 rounded-full text-white/40 hover:text-white transition-colors"
+                >
+                  <X size={20} />
+                </button>
+              </div>
+
+              <div className="flex-1 overflow-y-auto custom-scrollbar mb-8 space-y-3 pr-2">
+                <button
+                  onClick={createSnapshot}
+                  disabled={isSavingSnapshot || markers.length === 0}
+                  className="w-full p-4 bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/20 rounded-2xl flex items-center justify-between group transition-all"
+                >
+                  <div className="flex items-center gap-4">
+                    <div className="w-10 h-10 bg-emerald-500/20 rounded-xl flex items-center justify-center">
+                      <Camera className="text-emerald-500" size={20} />
+                    </div>
+                    <div className="text-left">
+                      <span className="text-white font-bold text-sm block">Create New Backup</span>
+                      <span className="text-[10px] text-emerald-500/60 uppercase tracking-widest font-bold">Snapshot Current View</span>
+                    </div>
+                  </div>
+                  {isSavingSnapshot ? (
+                    <div className="w-5 h-5 border-t-2 border-emerald-500 rounded-full animate-spin" />
+                  ) : (
+                    <Plus className="text-emerald-500 group-hover:scale-125 transition-transform" size={20} />
+                  )}
+                </button>
+
+                <div className="h-px bg-white/5 my-6" />
+
+                {snapshots.length === 0 ? (
+                  <div className="text-center py-12">
+                    <History className="text-white/10 mx-auto mb-4" size={48} />
+                    <p className="text-white/30 text-sm italic">No backups found yet.</p>
+                  </div>
+                ) : (
+                  snapshots.map((snap) => (
+                    <div 
+                      key={snap.id}
+                      className="p-4 bg-white/5 border border-white/5 rounded-2xl flex items-center justify-between group hover:border-white/10 transition-all"
+                    >
+                      <div className="flex items-center gap-4">
+                        <div className="w-10 h-10 bg-white/5 rounded-xl flex items-center justify-center">
+                          <Clock className="text-gray-400" size={18} />
+                        </div>
+                        <div className="text-left">
+                          <span className="text-white font-medium text-sm block truncate max-w-[180px]">{snap.name}</span>
+                          <span className="text-[10px] text-gray-500 font-mono">
+                            {new Date(snap.createdAt).toLocaleString()} • {snap.markers.length} items
+                          </span>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <button
+                          onClick={() => restoreSnapshot(snap)}
+                          className="px-4 py-2 bg-emerald-500 hover:bg-emerald-600 text-white text-[10px] font-bold uppercase tracking-wider rounded-xl transition-all active:scale-95"
+                        >
+                          Restore
+                        </button>
+                        <button
+                          onClick={() => deleteSnapshot(snap.id)}
+                          className="p-2 hover:bg-red-500/10 text-white/20 hover:text-red-500 rounded-xl transition-all"
+                        >
+                          <Trash size={16} />
+                        </button>
+                      </div>
+                    </div>
+                  ))
+                )}
+              </div>
+
+              <div className="p-4 bg-emerald-500/5 rounded-2xl border border-emerald-500/10 text-[10px] leading-relaxed text-emerald-500/70">
+                <span className="font-bold uppercase tracking-widest block mb-1">Backup Strategy</span>
+                Each backup saves all coordinates, names, and photo links. Restoring a backup will replace your current garden map with the version saved at that time.
+              </div>
             </motion.div>
           </div>
         )}

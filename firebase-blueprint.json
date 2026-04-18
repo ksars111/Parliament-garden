@@ -31,6 +31,23 @@
       },
       "description": "Single document containing all garden markers for read optimization."
     },
+    "/snapshots/{snapshotId}": {
+      "schema": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "string" },
+          "uid": { "type": "string" },
+          "name": { "type": "string" },
+          "createdAt": { "type": "number" },
+          "markers": {
+            "type": "array",
+            "items": { "$ref": "#/entities/PlantMarker" }
+          }
+        },
+        "required": ["id", "uid", "name", "createdAt", "markers"]
+      },
+      "description": "Historical snapshots of the garden for restoration purposes."
+    },
     "/test/connection": {
       "schema": "object",
       "description": "Connection test document."
