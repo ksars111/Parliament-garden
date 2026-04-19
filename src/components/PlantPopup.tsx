@@ -23,6 +23,7 @@ export const PlantPopup: React.FC<PlantPopupProps> = ({ marker, onSave, onDelete
     return marker.images.map(img => typeof img === 'string' ? { url: img } : img);
   });
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
+  const [direction, setDirection] = useState(0);
   const [type, setType] = useState(marker.type);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
@@ -160,11 +161,13 @@ export const PlantPopup: React.FC<PlantPopupProps> = ({ marker, onSave, onDelete
 
   const nextImage = (e?: React.MouseEvent) => {
     e?.stopPropagation();
+    setDirection(1);
     setCurrentImageIndex((prev) => (prev + 1) % allImages.length);
   };
 
   const prevImage = (e?: React.MouseEvent) => {
     e?.stopPropagation();
+    setDirection(-1);
     setCurrentImageIndex((prev) => (prev - 1 + allImages.length) % allImages.length);
   };
 
@@ -184,49 +187,63 @@ export const PlantPopup: React.FC<PlantPopupProps> = ({ marker, onSave, onDelete
 
   const isConfigured = import.meta.env.VITE_CLOUDINARY_CLOUD_NAME && import.meta.env.VITE_CLOUDINARY_UPLOAD_PRESET;
 
+  const swipeVariants = {
+    enter: (direction: number) => ({
+      x: direction > 0 ? 50 : -50,
+      opacity: 0
+    }),
+    center: {
+      zIndex: 1,
+      x: 0,
+      opacity: 1
+    },
+    exit: (direction: number) => ({
+      zIndex: 0,
+      x: direction > 0 ? -50 : 50,
+      opacity: 0
+    })
+  };
+
   return (
     <>
       <motion.div
         initial={{ opacity: 0, scale: 0.9, y: 10 }}
         animate={{ opacity: 1, scale: 1, y: 0 }}
         exit={{ opacity: 0, scale: 0.9, y: 10 }}
-        className="bg-white rounded-2xl shadow-2xl overflow-hidden w-80 max-w-full max-h-[90vh] border border-gray-100 flex flex-col"
+        className="bg-white rounded-2xl shadow-[0_30px_60px_-15px_rgba(0,0,0,0.3),0_0_20px_-10px_rgba(0,0,0,0.1)] overflow-hidden w-80 max-w-full max-h-[90vh] border border-gray-200/50 flex flex-col"
       >
         <div 
-          className="relative h-96 shrink-0 bg-gray-200 group overflow-hidden touch-none"
-          onWheel={handleWheel}
-          onTouchStart={handleTouchStart}
-          onTouchMove={handleTouchMove}
-          onTouchEnd={handleTouchEnd}
-          ref={imageContainerRef}
+          className="relative h-96 shrink-0 bg-gray-200 group overflow-hidden"
         >
           {allImages.length > 0 ? (
             <div className="relative w-full h-full">
-              <AnimatePresence mode="wait">
+              <AnimatePresence mode="popLayout" initial={false} custom={direction}>
                 <motion.div
                   key={allImages[currentImageIndex].url}
-                  initial={{ opacity: 0 }}
-                  animate={{ opacity: 1 }}
-                  exit={{ opacity: 0 }}
-                  className="w-full h-full relative overflow-hidden"
+                  custom={direction}
+                  variants={swipeVariants}
+                  initial="enter"
+                  animate="center"
+                  exit="exit"
+                  transition={{
+                    x: { type: "spring", stiffness: 300, damping: 30 },
+                    opacity: { duration: 0.2 }
+                  }}
+                  drag={allImages.length > 1 ? "x" : false}
+                  dragConstraints={{ left: 0, right: 0 }}
+                  dragElastic={0.2}
+                  onDragEnd={(_, info) => {
+                    if (info.offset.x < -50) {
+                      nextImage();
+                    } else if (info.offset.x > 50) {
+                      prevImage();
+                    }
+                  }}
+                  className="w-full h-full relative overflow-hidden cursor-grab active:cursor-grabbing"
                 >
-                  <motion.img 
+                  <img 
                     src={allImages[currentImageIndex].url} 
                     alt={name} 
-                    style={{ 
-                      scale: zoomScale,
-                      x: zoomPosition.x,
-                      y: zoomPosition.y,
-                      cursor: zoomScale > 1 ? 'grab' : 'default'
-                    }}
-                    drag={zoomScale > 1}
-                    dragConstraints={imageContainerRef}
-                    onDragEnd={(_, info) => {
-                      setZoomPosition(prev => ({
-                        x: prev.x + info.offset.x,
-                        y: prev.y + info.offset.y
-                      }));
-                    }}
                     className={`w-full h-full object-cover transition-opacity duration-300 ${isUploading ? 'opacity-50' : 'opacity-100'}`}
                     referrerPolicy="no-referrer"
                     draggable={false}
@@ -238,19 +255,6 @@ export const PlantPopup: React.FC<PlantPopupProps> = ({ marker, onSave, onDelete
                   )}
                 </motion.div>
               </AnimatePresence>
-
-              {zoomScale > 1 && (
-                <button
-                  onClick={() => {
-                    setZoomScale(1);
-                    setZoomPosition({ x: 0, y: 0 });
-                  }}
-                  className="absolute top-3 left-1/2 -translate-x-1/2 p-2 bg-black/40 hover:bg-black/60 backdrop-blur-md rounded-full text-white z-10 flex items-center gap-2 text-[10px] font-bold uppercase tracking-wide px-3"
-                >
-                  <RotateCcw size={12} />
-                  Reset Zoom
-                </button>
-              )}
 
               {allImages.length > 1 && (
                 <>
@@ -557,7 +561,14 @@ export const PlantPopup: React.FC<PlantPopupProps> = ({ marker, onSave, onDelete
               className="bg-white rounded-3xl overflow-hidden max-w-4xl w-full max-h-[90vh] flex flex-col md:flex-row shadow-2xl"
               onClick={(e) => e.stopPropagation()}
             >
-              <div className="md:w-1/2 h-[50vh] md:h-auto md:min-h-[600px] bg-gray-900 relative flex flex-col">
+              <div 
+                className="md:w-1/2 h-[50vh] md:h-auto md:min-h-[600px] bg-gray-900 relative flex flex-col touch-none"
+                onWheel={handleWheel}
+                onTouchStart={handleTouchStart}
+                onTouchMove={handleTouchMove}
+                onTouchEnd={handleTouchEnd}
+                ref={imageContainerRef}
+              >
                 <div className="flex-1 relative flex items-center justify-center overflow-hidden">
                   <AnimatePresence mode="wait">
                     {allImages.length > 0 ? (
@@ -569,9 +580,24 @@ export const PlantPopup: React.FC<PlantPopupProps> = ({ marker, onSave, onDelete
                         transition={{ duration: 0.4 }}
                         className="w-full h-full relative"
                       >
-                        <img 
+                        <motion.img 
                           src={allImages[currentImageIndex].url} 
                           alt={name} 
+                          style={{ 
+                            scale: zoomScale,
+                            x: zoomPosition.x,
+                            y: zoomPosition.y,
+                            cursor: zoomScale > 1 ? 'grab' : 'default'
+                          }}
+                          drag={zoomScale > 1}
+                          dragMomentum={false}
+                          dragElastic={0}
+                          onDragEnd={(_, info) => {
+                            setZoomPosition(prev => ({
+                              x: prev.x + info.offset.x,
+                              y: prev.y + info.offset.y
+                            }));
+                          }}
                           className="w-full h-full object-contain"
                           referrerPolicy="no-referrer"
                         />
@@ -587,6 +613,19 @@ export const PlantPopup: React.FC<PlantPopupProps> = ({ marker, onSave, onDelete
                       </div>
                     )}
                   </AnimatePresence>
+
+                  {zoomScale > 1 && (
+                    <button
+                      onClick={() => {
+                        setZoomScale(1);
+                        setZoomPosition({ x: 0, y: 0 });
+                      }}
+                      className="absolute top-6 left-1/2 -translate-x-1/2 p-2 bg-white/20 hover:bg-white/30 backdrop-blur-md rounded-full text-white z-10 flex items-center gap-2 text-[10px] font-bold uppercase tracking-wide px-4 h-10 border border-white/10 shadow-xl"
+                    >
+                      <RotateCcw size={14} />
+                      Reset Zoom
+                    </button>
+                  )}
 
                   {allImages.length > 1 && (
                     <>
