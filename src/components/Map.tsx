@@ -447,6 +447,7 @@ export const GardenMap: React.FC = () => {
   }, [showLegend]);
   const [isDataLoading, setIsDataLoading] = useState(true);
   const [isQuotaExceeded, setIsQuotaExceeded] = useState(false);
+  const [isWriteQuotaExceeded, setIsWriteQuotaExceeded] = useState(false);
   const mapRef = useRef<maplibregl.Map | null>(null);
 
   // Handle Anonymous Auth
@@ -642,9 +643,14 @@ export const GardenMap: React.FC = () => {
         markers: arrayUnion(newMarker)
       }, { merge: true });
       setSaveError(null);
+      setIsWriteQuotaExceeded(false);
       return newMarker;
     } catch (e) {
       console.error("Failed to save new marker:", e);
+      const errorMsg = e instanceof Error ? e.message : String(e);
+      if (errorMsg.includes('Quota limit exceeded') || errorMsg.includes('Quota exceeded')) {
+        setIsWriteQuotaExceeded(true);
+      }
       setSaveError("Failed to save. Check your connection.");
       handleFirestoreError(e, OperationType.WRITE, 'garden/data');
       return null;
@@ -662,37 +668,40 @@ export const GardenMap: React.FC = () => {
 
   const updateMarker = useCallback(async (updated: PlantMarker) => {
     if (!canEdit || !auth.currentUser) return;
-    const oldMarker = markers.find(m => m.id === updated.id);
-    if (!oldMarker) return;
+    const markerIndex = markers.findIndex(m => m.id === updated.id);
+    if (markerIndex === -1) return;
 
     try {
       console.log("Updating marker:", updated.id);
       const docRef = doc(db, 'garden', 'data');
       
-      // Atomic update: remove old, add new
-      await setDoc(docRef, {
-        markers: arrayRemove(oldMarker)
-      }, { merge: true });
+      // Calculate new markers list locally to save in one write
+      const newMarkers = [...markers];
+      newMarkers[markerIndex] = updated;
       
-      await setDoc(docRef, {
-        markers: arrayUnion(updated)
-      }, { merge: true });
+      await setDoc(docRef, { markers: newMarkers }, { merge: true });
 
       setSelectedMarker(updated);
       setSaveError(null);
+      setIsWriteQuotaExceeded(false);
     } catch (e) {
       console.error("Failed to update marker:", e);
-      setSaveError("Failed to update. Check your connection.");
+      const errorMsg = e instanceof Error ? e.message : String(e);
+      if (errorMsg.includes('Quota limit exceeded') || errorMsg.includes('Quota exceeded')) {
+        setIsWriteQuotaExceeded(true);
+      }
+      setSaveError("Cloud quota reached. Saving disabled temporarily.");
       handleFirestoreError(e, OperationType.WRITE, 'garden/data');
     }
   }, [canEdit, markers]);
 
   const updatePosition = useCallback(async (updated: PlantMarker, skipUndo = false) => {
     if (!canEdit || !auth.currentUser) return;
-    const oldMarker = markers.find(m => m.id === updated.id);
-    if (!oldMarker) return;
+    const markerIndex = markers.findIndex(m => m.id === updated.id);
+    if (markerIndex === -1) return;
 
     if (!skipUndo) {
+      const oldMarker = markers[markerIndex];
       setLastMove({
         id: updated.id,
         prevPos: { lng: oldMarker.longitude, lat: oldMarker.latitude }
@@ -701,16 +710,18 @@ export const GardenMap: React.FC = () => {
 
     try {
       const docRef = doc(db, 'garden', 'data');
-      await setDoc(docRef, {
-        markers: arrayRemove(oldMarker)
-      }, { merge: true });
+      const newMarkers = [...markers];
+      newMarkers[markerIndex] = updated;
       
-      await setDoc(docRef, {
-        markers: arrayUnion(updated)
-      }, { merge: true });
+      await setDoc(docRef, { markers: newMarkers }, { merge: true });
       
       setSaveError(null);
+      setIsWriteQuotaExceeded(false);
     } catch (e) {
+      const errorMsg = e instanceof Error ? e.message : String(e);
+      if (errorMsg.includes('Quota limit exceeded') || errorMsg.includes('Quota exceeded')) {
+        setIsWriteQuotaExceeded(true);
+      }
       setSaveError("Failed to move marker.");
       handleFirestoreError(e, OperationType.WRITE, 'garden/data');
     }
@@ -745,7 +756,12 @@ export const GardenMap: React.FC = () => {
       }, { merge: true });
       setSelectedMarker(null);
       setSaveError(null);
+      setIsWriteQuotaExceeded(false);
     } catch (e) {
+      const errorMsg = e instanceof Error ? e.message : String(e);
+      if (errorMsg.includes('Quota limit exceeded') || errorMsg.includes('Quota exceeded')) {
+        setIsWriteQuotaExceeded(true);
+      }
       setSaveError("Failed to delete marker.");
       handleFirestoreError(e, OperationType.DELETE, 'garden/data');
     }
@@ -1370,6 +1386,35 @@ export const GardenMap: React.FC = () => {
         )}
       </AnimatePresence>
 
+      <AnimatePresence>
+        {isWriteQuotaExceeded && (
+          <motion.div
+            initial={{ opacity: 0, y: -20 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -20 }}
+            className="absolute top-24 left-1/2 -translate-x-1/2 z-[8000] w-[90%] max-w-md"
+          >
+            <div className="bg-orange-500/90 backdrop-blur-md text-white p-4 rounded-2xl shadow-2xl flex items-center gap-4 border border-white/20">
+              <div className="bg-white/20 p-2 rounded-xl">
+                <AlertCircle size={20} />
+              </div>
+              <div className="flex-1">
+                <h4 className="text-sm font-bold">Write Quota Exceeded</h4>
+                <p className="text-[11px] opacity-90 leading-tight mt-0.5">
+                  You can't save changes right now because the daily write limit has been reached. You can still view the garden!
+                </p>
+              </div>
+              <button 
+                onClick={() => setIsWriteQuotaExceeded(false)}
+                className="p-1 hover:bg-white/10 rounded-lg transition-colors"
+              >
+                <X size={18} />
+              </button>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
       {/* Quota Exceeded Screen */}
       <AnimatePresence>
         {isQuotaExceeded && (
@@ -1389,21 +1434,21 @@ export const GardenMap: React.FC = () => {
                 <AlertCircle className="text-emerald-500" size={40} />
               </div>
 
-              <h2 className="text-2xl font-bold text-white mb-4 tracking-tight">Free Tier Quota Exceeded</h2>
+              <h2 className="text-2xl font-bold text-white mb-4 tracking-tight">Daily Quota Reached</h2>
               
               <div className="space-y-4 text-gray-400 text-sm leading-relaxed mb-8">
                 <p>
-                  This project has reached the 50,000 daily read limit provided by the Firestore free tier.
+                  This project has reached the usage limits provided by the Firestore free tier.
                 </p>
                 <p className="text-xs opacity-60">
-                  The quota will automatically reset at midnight (Pacific Time).
+                  The quota will automatically reset at midnight.
                 </p>
               </div>
 
               <div className="p-4 bg-emerald-500/5 rounded-2xl border border-emerald-500/10 text-left mb-8 text-[11px] leading-relaxed">
                 <span className="text-emerald-400 font-bold uppercase tracking-wider block mb-1">Developer Note</span>
-                Data fetching has been optimized to minimize reads, but the current daily limit has already been consumed. 
-                Please try again tomorrow or upgrade the plan in the Firebase Console.
+                Data fetching has been optimized but the free limit is currently consumed. 
+                You can still view the map if it was cached locally.
               </div>
 
               <button
