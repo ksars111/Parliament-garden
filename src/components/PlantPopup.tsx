@@ -271,6 +271,27 @@ export const PlantPopup: React.FC<PlantPopupProps> = ({ marker, onSave, onDelete
                   >
                     <Maximize2 size={16} />
                   </button>
+
+                  {canEdit && isConfigured && allImages.length > 0 && allImages.length < 5 && (
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        fileInputRef.current?.click();
+                      }}
+                      disabled={isUploading}
+                      className="absolute top-4 left-4 p-2 bg-emerald-500/90 hover:bg-emerald-500 backdrop-blur-md rounded-full text-white shadow-xl transition-all active:scale-95 z-20 flex items-center gap-2 px-3"
+                      title="Add Photo"
+                    >
+                      {isUploading ? (
+                        <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                      ) : (
+                        <>
+                          <PlusIcon size={14} strokeWidth={3} />
+                          <span className="text-[10px] font-bold uppercase tracking-wider">Add Photo</span>
+                        </>
+                      )}
+                    </button>
+                  )}
                 </motion.div>
               </AnimatePresence>
 
@@ -338,6 +359,44 @@ export const PlantPopup: React.FC<PlantPopupProps> = ({ marker, onSave, onDelete
               <input value={botanicalName} onChange={(e) => setBotanicalName(e.target.value)} className="w-full italic text-sm text-gray-500 bg-transparent border-none p-0 focus:ring-0" placeholder="Botanical Name" />
               <textarea value={description} onChange={(e) => setDescription(e.target.value)} rows={3} className="w-full text-sm text-gray-600 bg-gray-50 rounded-xl p-3 border-none focus:ring-emerald-500/20 resize-none" placeholder="Description..." />
               
+              <div className="pt-2">
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-[10px] font-bold uppercase tracking-widest text-gray-400">Photos ({allImages.length}/5)</span>
+                  {allImages.length < 5 && isConfigured && (
+                    <button 
+                      onClick={() => !isUploading && fileInputRef.current?.click()}
+                      disabled={isUploading}
+                      className="text-[10px] font-bold uppercase tracking-widest text-emerald-500 hover:text-emerald-600 flex items-center gap-1 transition-colors"
+                    >
+                      {isUploading ? 'Uploading...' : <><PlusIcon size={12} /> Add Photo</>}
+                    </button>
+                  )}
+                </div>
+                
+                {allImages.length > 0 && (
+                  <div className="flex gap-2 p-1 overflow-x-auto custom-scrollbar pb-2">
+                    {allImages.map((img, idx) => (
+                      <div key={idx} className="relative group/thumb shrink-0">
+                        <div className="w-12 h-12 rounded-lg overflow-hidden border border-gray-100">
+                          <img src={img.url} alt="" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+                        </div>
+                        <button 
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            const newImages = [...allImages];
+                            newImages.splice(idx, 1);
+                            handleReorder(newImages);
+                          }}
+                          className="absolute -top-1 -right-1 w-4 h-4 bg-red-500 text-white rounded-full flex items-center justify-center opacity-0 group-hover/thumb:opacity-100 transition-opacity shadow-sm"
+                        >
+                          <X size={10} strokeWidth={3} />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
               <div className="pt-2 flex justify-between items-center">
                 <button onClick={() => onDelete(marker.id)} className="p-2 bg-red-50 text-red-500 rounded-lg hover:bg-red-100 transition-colors"><Trash2 size={18} /></button>
                 <div className="flex items-center gap-3 text-[10px] font-bold uppercase">
