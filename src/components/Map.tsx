@@ -68,6 +68,7 @@ const MapComponent: React.FC<MapComponentProps> = ({
   const [isMapLoaded, setIsMapLoaded] = useState(false);
   const [showLabels, setShowLabels] = useState(INITIAL_ZOOM > 16.5);
   const [displayZoom, setDisplayZoom] = useState(INITIAL_ZOOM);
+  const [bearing, setBearing] = useState(0);
   const markersLayerRef = useRef<Record<string, maplibregl.Marker>>({});
   const rafRef = useRef<number | null>(null);
   const hasInitialFit = useRef(false);
@@ -230,6 +231,7 @@ const MapComponent: React.FC<MapComponentProps> = ({
       const zoom = map.getZoom();
       setShowLabels(zoom > 16.5);
       setDisplayZoom(zoom);
+      setBearing(map.getBearing());
       updateMarkerZIndices();
     });
 
@@ -246,8 +248,14 @@ const MapComponent: React.FC<MapComponentProps> = ({
       setDisplayZoom(zoom);
     });
 
-    map.on('move', updateMarkerZIndices);
-    map.on('rotate', updateMarkerZIndices);
+    map.on('move', () => {
+      setBearing(map.getBearing());
+      updateMarkerZIndices();
+    });
+    map.on('rotate', () => {
+      setBearing(map.getBearing());
+      updateMarkerZIndices();
+    });
     map.on('pitch', updateMarkerZIndices);
 
     map.on('click', (e) => {
@@ -392,6 +400,30 @@ const MapComponent: React.FC<MapComponentProps> = ({
           pointer-events: none;
         }
       `}</style>
+
+      {/* Compass UI */}
+      <div className="absolute top-6 left-1/2 -translate-x-1/2 z-[2000] pointer-events-none">
+        <motion.button
+          onClick={() => {
+            if (mapRef.current) {
+              mapRef.current.easeTo({ bearing: 0, duration: 800 });
+            }
+          }}
+          style={{ rotate: -bearing }}
+          whileHover={{ scale: 1.1, backgroundColor: 'rgba(0,0,0,0.2)' }}
+          whileTap={{ scale: 0.95 }}
+          className="pointer-events-auto w-9 h-9 bg-black/5 backdrop-blur-[2px] border border-white/5 rounded-full flex flex-col items-center justify-center text-white shadow-sm group transition-all"
+          title="Reset orientation"
+        >
+          <div className="flex flex-col items-center -mt-0.5">
+            <span className="text-[9px] font-bold text-white/40 tracking-tighter leading-none mb-0.5 group-hover:text-emerald-500 transition-colors">N</span>
+            <svg width="10" height="14" viewBox="0 0 10 14" fill="none" xmlns="http://www.w3.org/2000/svg" className="drop-shadow-sm">
+              <path d="M5 0L0 14L5 11.2L10 14L5 0Z" fill="white" fillOpacity="0.3" className="group-hover:fill-emerald-500 transition-colors"/>
+              <path d="M5 0L5 11.2L10 14L5 0Z" fill="white" fillOpacity="0.1"/>
+            </svg>
+          </div>
+        </motion.button>
+      </div>
 
       {/* Zoom Level Indicator */}
       <div className="absolute bottom-6 left-6 z-[2000] flex flex-col gap-2 pointer-events-none">
