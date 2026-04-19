@@ -249,7 +249,8 @@ export const PlantPopup: React.FC<PlantPopupProps> = ({ marker, onSave, onDelete
                     if (info.offset.x < -50) nextImage();
                     else if (info.offset.x > 50) prevImage();
                   }}
-                  className="w-full h-full relative overflow-hidden cursor-grab active:cursor-grabbing"
+                  className="w-full h-full relative overflow-hidden cursor-pointer"
+                  onClick={openPhotoFocus}
                 >
                   <img 
                     src={allImages[currentImageIndex].url} 
@@ -265,7 +266,7 @@ export const PlantPopup: React.FC<PlantPopupProps> = ({ marker, onSave, onDelete
                   )}
                   <button
                     onClick={openPhotoFocus}
-                    className="absolute top-3 right-3 p-2 bg-black/40 hover:bg-black/60 backdrop-blur-md rounded-full text-white transition-all hover:scale-110 active:scale-95"
+                    className="absolute bottom-3 right-3 p-2 bg-black/40 hover:bg-black/60 backdrop-blur-md rounded-full text-white transition-all hover:scale-110 active:scale-95 z-20 shadow-lg"
                     title="Expand View"
                   >
                     <Maximize2 size={16} />
@@ -316,10 +317,14 @@ export const PlantPopup: React.FC<PlantPopupProps> = ({ marker, onSave, onDelete
               )}
             </div>
           )}
-          <button onClick={onClose} className="absolute top-3 right-3 p-1.5 bg-black/20 hover:bg-black/40 backdrop-blur-md rounded-full text-white transition-colors">
-            <X size={18} />
+          <button 
+            onClick={onClose} 
+            className="absolute top-4 right-4 p-2 bg-black/60 hover:bg-black/80 backdrop-blur-xl rounded-full text-white transition-all shadow-lg active:scale-90 z-20 group"
+            title="Close Popup"
+          >
+            <X size={20} className="group-hover:rotate-90 transition-transform duration-300" />
           </button>
-          {error && <div className="absolute inset-x-0 top-0 p-2 bg-red-500 text-white text-[10px] font-bold text-center">{error}</div>}
+          {error && <div className="absolute inset-x-0 top-0 p-2 bg-red-500 text-white text-[10px] font-bold text-center z-30">{error}</div>}
         </div>
 
         <div className="p-5 flex-1 overflow-y-auto">
@@ -337,29 +342,39 @@ export const PlantPopup: React.FC<PlantPopupProps> = ({ marker, onSave, onDelete
                 <button onClick={() => onDelete(marker.id)} className="p-2 bg-red-50 text-red-500 rounded-lg hover:bg-red-100 transition-colors"><Trash2 size={18} /></button>
                 <div className="flex items-center gap-3 text-[10px] font-bold uppercase">
                   {isSaving && <span className="text-emerald-500 animate-pulse">Saving...</span>}
-                  <button onClick={onClose} className="px-4 py-2 bg-gray-100 text-gray-600 rounded-lg">Done</button>
+                  <button onClick={onClose} className="px-5 py-2.5 bg-emerald-500 text-white rounded-xl shadow-lg shadow-emerald-500/20 hover:bg-emerald-600 transition-all active:scale-95">Done</button>
                 </div>
               </div>
             </div>
           ) : (
-            <div className="space-y-4">
-              <div className="flex justify-between items-start">
-                <div>
-                  <h3 className="text-xl font-bold text-gray-900">{name || 'Unnamed'}</h3>
-                  {botanicalName && <p className="text-sm italic text-gray-500 mt-0.5">{botanicalName}</p>}
+            <div className="h-full flex flex-col">
+              <div className="flex-1 space-y-4">
+                <div className="flex justify-between items-start">
+                  <div>
+                    <h3 className="text-xl font-bold text-gray-900">{name || 'Unnamed'}</h3>
+                    {botanicalName && <p className="text-sm italic text-gray-500 mt-0.5">{botanicalName}</p>}
+                  </div>
+                  <span className={`text-[10px] font-bold uppercase tracking-widest px-2.5 py-1 rounded-md ${type === 'tree' ? 'bg-green-100 text-green-700' : 'bg-pink-100 text-pink-600'}`}>{type}</span>
                 </div>
-                <span className={`text-[10px] font-bold uppercase tracking-widest px-2.5 py-1 rounded-md ${type === 'tree' ? 'bg-green-100 text-green-700' : 'bg-pink-100 text-pink-600'}`}>{type}</span>
+                <p className="text-sm text-gray-600 leading-relaxed mb-6">
+                  {description ? (
+                    description.length > 100 ? (
+                      <>
+                        {description.substring(0, 100)}...
+                        <button onClick={openFullModal} className="text-emerald-500 font-bold ml-1 hover:underline">show more</button>
+                      </>
+                    ) : description
+                  ) : <span className="text-gray-400 italic">No description provided.</span>}
+                </p>
               </div>
-              <p className="text-sm text-gray-600 leading-relaxed">
-                {description ? (
-                  description.length > 100 ? (
-                    <>
-                      {description.substring(0, 100)}...
-                      <button onClick={openFullModal} className="text-emerald-500 font-bold ml-1 hover:underline">show more</button>
-                    </>
-                  ) : description
-                ) : <span className="text-gray-400 italic">No description provided.</span>}
-              </p>
+              <div className="pt-4 border-t border-gray-100 mt-auto">
+                <button 
+                  onClick={onClose}
+                  className="w-full py-3 bg-gray-900 hover:bg-black text-white rounded-xl font-bold text-[11px] uppercase tracking-widest shadow-lg transition-all active:scale-[0.98]"
+                >
+                  Close Information
+                </button>
+              </div>
             </div>
           )}
         </div>
