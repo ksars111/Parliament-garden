@@ -374,25 +374,47 @@ export const PlantPopup: React.FC<PlantPopupProps> = ({ marker, onSave, onDelete
                 </div>
                 
                 {allImages.length > 0 && (
-                  <div className="flex gap-2 p-1 overflow-x-auto custom-scrollbar pb-2">
-                    {allImages.map((img, idx) => (
-                      <div key={idx} className="relative group/thumb shrink-0">
-                        <div className="w-12 h-12 rounded-lg overflow-hidden border border-gray-100">
-                          <img src={img.url} alt="" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
-                        </div>
-                        <button 
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            const newImages = [...allImages];
-                            newImages.splice(idx, 1);
-                            handleReorder(newImages);
-                          }}
-                          className="absolute -top-1 -right-1 w-4 h-4 bg-red-500 text-white rounded-full flex items-center justify-center opacity-0 group-hover/thumb:opacity-100 transition-opacity shadow-sm"
+                  <div className="pt-1">
+                    <Reorder.Group 
+                      axis="x" 
+                      values={allImages} 
+                      onReorder={handleReorder}
+                      className="flex gap-2 p-1 overflow-x-auto custom-scrollbar pb-2"
+                    >
+                      {allImages.map((img, idx) => (
+                        <Reorder.Item 
+                          key={img.url} 
+                          value={img} 
+                          className="relative group/thumb shrink-0 cursor-grab active:cursor-grabbing"
                         >
-                          <X size={10} strokeWidth={3} />
-                        </button>
-                      </div>
-                    ))}
+                          <div className={`w-12 h-12 rounded-lg overflow-hidden border-2 transition-colors ${idx === 0 ? 'border-emerald-500 shadow-sm' : 'border-gray-100'}`}>
+                            <img src={img.url} alt="" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+                          </div>
+                          
+                          {idx === 0 && (
+                            <div className="absolute -top-1.5 left-1/2 -translate-x-1/2 bg-emerald-500 text-white text-[7px] font-black uppercase px-1 rounded shadow-sm z-10">
+                              Main
+                            </div>
+                          )}
+
+                          <button 
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              const newImages = [...allImages];
+                              newImages.splice(idx, 1);
+                              handleReorder(newImages);
+                            }}
+                            className="absolute -top-1 -right-1 w-4 h-4 bg-red-500 text-white rounded-full flex items-center justify-center opacity-0 group-hover/thumb:opacity-100 transition-opacity shadow-sm z-10"
+                          >
+                            <X size={10} strokeWidth={3} />
+                          </button>
+                        </Reorder.Item>
+                      ))}
+                    </Reorder.Group>
+                    <p className="text-[9px] text-gray-400 mt-1 flex items-center gap-1">
+                      <GripVertical size={10} />
+                      Drag to reorder. The first photo is the main display.
+                    </p>
                   </div>
                 )}
               </div>
