@@ -429,6 +429,8 @@ export const GardenMap: React.FC = () => {
   const [trackingStatus, setTrackingStatus] = useState<string | null>(null);
   const userMarkerRef = useRef<maplibregl.Marker | null>(null);
   const watchIdRef = useRef<number | null>(null);
+  const isAnchoredRef = useRef(false);
+  const isFirstTrackingFix = useRef(true);
   const legendRef = useRef<HTMLDivElement>(null);
 
   // Helper to check if point is within MAX_BOUNDS
@@ -443,6 +445,7 @@ export const GardenMap: React.FC = () => {
     if (isTracking) {
       setIsTracking(false);
       setTrackingStatus(null);
+      isAnchoredRef.current = false;
       if (watchIdRef.current !== null) {
         navigator.geolocation.clearWatch(watchIdRef.current);
         watchIdRef.current = null;
@@ -471,6 +474,8 @@ export const GardenMap: React.FC = () => {
 
     setIsTracking(true);
     setTrackingStatus("Calibrating GPS...");
+    isFirstTrackingFix.current = true;
+    isAnchoredRef.current = true;
     
     watchIdRef.current = navigator.geolocation.watchPosition(
       (position) => {
@@ -511,11 +516,18 @@ export const GardenMap: React.FC = () => {
           userMarkerRef.current.setLngLat([longitude, latitude]);
         }
 
-        if (mapRef.current) {
-          mapRef.current.easeTo({
+        if (mapRef.current && isAnchoredRef.current) {
+          const options: any = {
             center: [longitude, latitude],
             duration: 800
-          });
+          };
+          
+          if (isFirstTrackingFix.current) {
+            options.zoom = 19.5; // Zoom in close for initial fix
+            isFirstTrackingFix.current = false;
+          }
+
+          mapRef.current.easeTo(options);
         }
       },
       (error) => {
@@ -539,7 +551,10 @@ export const GardenMap: React.FC = () => {
       if (heading === undefined && e.alpha !== null) heading = 360 - e.alpha;
 
       if (heading !== undefined && mapRef.current && isTracking) {
-        mapRef.current.setBearing(heading);
+        if (isAnchoredRef.current) {
+          mapRef.current.setBearing(heading);
+        }
+        
         const arrow = document.getElementById('user-heading-arrow');
         if (arrow) arrow.style.transform = `rotate(${heading}deg)`;
       }
@@ -967,6 +982,11 @@ export const GardenMap: React.FC = () => {
 
   const resetView = () => {
     if (!mapRef.current) return;
+    
+    if (isTracking) {
+      isAnchoredRef.current = false;
+    }
+
     mapRef.current.flyTo({
       center: INITIAL_CENTER,
       zoom: INITIAL_ZOOM,
