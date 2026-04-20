@@ -25,6 +25,7 @@ export const PlantPopup: React.FC<PlantPopupProps> = ({ marker, onSave, onDelete
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
   const [direction, setDirection] = useState(0);
   const [type, setType] = useState(marker.type);
+  const [aspectRatios, setAspectRatios] = useState<Record<string, number>>({});
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isPhotoFocus, setIsPhotoFocus] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
@@ -148,6 +149,11 @@ export const PlantPopup: React.FC<PlantPopupProps> = ({ marker, onSave, onDelete
     setIsModalOpen(true);
   };
 
+  const handleImageLoad = (url: string, e: React.SyntheticEvent<HTMLImageElement>) => {
+    const { naturalWidth, naturalHeight } = e.currentTarget;
+    setAspectRatios(prev => ({ ...prev, [url]: naturalWidth / naturalHeight }));
+  };
+
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
@@ -227,7 +233,14 @@ export const PlantPopup: React.FC<PlantPopupProps> = ({ marker, onSave, onDelete
         exit={{ opacity: 0, scale: 0.9, y: 10 }}
         className="bg-white rounded-2xl shadow-[0_30px_60px_-15px_rgba(0,0,0,0.3),0_0_20px_-10px_rgba(0,0,0,0.1)] overflow-hidden w-80 max-w-full max-h-[90vh] border border-gray-200/50 flex flex-col"
       >
-        <div className="relative h-96 shrink-0 bg-gray-200 group overflow-hidden">
+        <motion.div 
+          layout
+          className="relative shrink-0 bg-gray-100 group overflow-hidden transition-all duration-500 ease-in-out"
+          style={{ 
+            aspectRatio: aspectRatios[allImages[currentImageIndex]?.url] || '1/1',
+            maxHeight: '65vh'
+          }}
+        >
           {allImages.length > 0 ? (
             <div className="relative w-full h-full">
               <AnimatePresence mode="popLayout" initial={false} custom={direction}>
@@ -255,7 +268,8 @@ export const PlantPopup: React.FC<PlantPopupProps> = ({ marker, onSave, onDelete
                   <img 
                     src={allImages[currentImageIndex].url} 
                     alt={name} 
-                    className={`w-full h-full object-cover transition-opacity duration-300 ${isUploading ? 'opacity-50' : 'opacity-100'}`}
+                    onLoad={(e) => handleImageLoad(allImages[currentImageIndex].url, e)}
+                    className={`w-full h-full object-contain transition-opacity duration-300 ${isUploading ? 'opacity-50' : 'opacity-100'}`}
                     referrerPolicy="no-referrer"
                     draggable={false}
                   />
@@ -346,7 +360,7 @@ export const PlantPopup: React.FC<PlantPopupProps> = ({ marker, onSave, onDelete
             <X size={20} className="group-hover:rotate-90 transition-transform duration-300" />
           </button>
           {error && <div className="absolute inset-x-0 top-0 p-2 bg-red-500 text-white text-[10px] font-bold text-center z-30">{error}</div>}
-        </div>
+        </motion.div>
 
         <div className="p-5 flex-1 overflow-y-auto">
           {canEdit ? (
