@@ -1,7 +1,7 @@
 import React, { useState, useCallback, useEffect, useRef } from 'react';
 import maplibregl from 'maplibre-gl';
 import 'maplibre-gl/dist/maplibre-gl.css';
-import { Leaf, Plus, Map as MapIcon, Info, List, Search, X, ChevronRight, Pencil, ShieldCheck, AlertCircle, Home, Rotate3d, Trash2, Undo, History, Camera, Trash, Clock } from 'lucide-react';
+import { Leaf, Plus, Map as MapIcon, Info, List, Search, X, ChevronRight, Pencil, ShieldCheck, AlertCircle, Home, Rotate3d, Trash2, Undo, History, Camera, Trash, Clock, Navigation, LocateFixed } from 'lucide-react';
 import { PlantMarker, Snapshot } from '../types';
 import { PlantPopup } from './PlantPopup';
 import { motion, AnimatePresence } from 'motion/react';
@@ -425,7 +425,139 @@ export const GardenMap: React.FC = () => {
   const [snapshots, setSnapshots] = useState<Snapshot[]>([]);
   const [showSnapshots, setShowSnapshots] = useState(false);
   const [isSavingSnapshot, setIsSavingSnapshot] = useState(false);
+  const [isTracking, setIsTracking] = useState(false);
+  const [trackingStatus, setTrackingStatus] = useState<string | null>(null);
+  const userMarkerRef = useRef<maplibregl.Marker | null>(null);
+  const watchIdRef = useRef<number | null>(null);
   const legendRef = useRef<HTMLDivElement>(null);
+
+  // Helper to check if point is within MAX_BOUNDS
+  const isInsideGarden = useCallback((lng: number, lat: number) => {
+    // MAX_BOUNDS is defined at the top level
+    const sw = MAX_BOUNDS[0] as [number, number];
+    const ne = MAX_BOUNDS[1] as [number, number];
+    return lng >= sw[0] && lng <= ne[0] && lat >= sw[1] && lat <= ne[1];
+  }, []);
+
+  const toggleTracking = useCallback(async () => {
+    if (isTracking) {
+      setIsTracking(false);
+      setTrackingStatus(null);
+      if (watchIdRef.current !== null) {
+        navigator.geolocation.clearWatch(watchIdRef.current);
+        watchIdRef.current = null;
+      }
+      if (userMarkerRef.current) {
+        userMarkerRef.current.remove();
+        userMarkerRef.current = null;
+      }
+      return;
+    }
+
+    if (!navigator.geolocation) {
+      setTrackingStatus("Geolocation not supported");
+      return;
+    }
+
+    try {
+      // @ts-ignore
+      if (typeof DeviceOrientationEvent !== 'undefined' && typeof DeviceOrientationEvent.requestPermission === 'function') {
+        // @ts-ignore
+        await DeviceOrientationEvent.requestPermission();
+      }
+    } catch (e) {
+      console.log('Orientation permission denied or not required');
+    }
+
+    setIsTracking(true);
+    setTrackingStatus("Calibrating GPS...");
+    
+    watchIdRef.current = navigator.geolocation.watchPosition(
+      (position) => {
+        const { longitude, latitude } = position.coords;
+        
+        if (!isInsideGarden(longitude, latitude)) {
+          setTrackingStatus("You are outside the garden boundary");
+          setIsTracking(false);
+          if (watchIdRef.current !== null) {
+            navigator.geolocation.clearWatch(watchIdRef.current);
+            watchIdRef.current = null;
+          }
+          if (userMarkerRef.current) {
+            userMarkerRef.current.remove();
+            userMarkerRef.current = null;
+          }
+          return;
+        }
+
+        setTrackingStatus(null);
+
+        if (!userMarkerRef.current && mapRef.current) {
+          const el = document.createElement('div');
+          el.className = 'user-location-marker';
+          el.innerHTML = `
+            <div class="relative w-8 h-8 flex items-center justify-center">
+              <div class="absolute inset-0 bg-blue-500 rounded-full animate-ping opacity-40"></div>
+              <div class="relative w-4 h-4 bg-blue-600 border-2 border-white rounded-full shadow-lg z-10"></div>
+              <div id="user-heading-arrow" class="absolute inset-0 z-0 transition-transform duration-300">
+                <div class="absolute top-0 left-1/2 -translate-x-1/2 w-0 h-0 border-l-[6px] border-l-transparent border-r-[6px] border-r-transparent border-b-[10px] border-b-blue-600 -translate-y-1 opacity-80"></div>
+              </div>
+            </div>
+          `;
+          userMarkerRef.current = new maplibregl.Marker({ element: el })
+            .setLngLat([longitude, latitude])
+            .addTo(mapRef.current);
+        } else if (userMarkerRef.current) {
+          userMarkerRef.current.setLngLat([longitude, latitude]);
+        }
+
+        if (mapRef.current) {
+          mapRef.current.easeTo({
+            center: [longitude, latitude],
+            duration: 800
+          });
+        }
+      },
+      (error) => {
+        let msg = "Location error";
+        if (error.code === 1) msg = "Permission denied";
+        else if (error.code === 2) msg = "Unavailable";
+        else if (error.code === 3) msg = "Timeout";
+        setTrackingStatus(msg);
+        setIsTracking(false);
+      },
+      { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
+    );
+  }, [isTracking, isInsideGarden]);
+
+  useEffect(() => {
+    if (!isTracking) return;
+
+    const handleOrientation = (e: DeviceOrientationEvent) => {
+      // @ts-ignore
+      let heading = e.webkitCompassHeading;
+      if (heading === undefined && e.alpha !== null) heading = 360 - e.alpha;
+
+      if (heading !== undefined && mapRef.current && isTracking) {
+        mapRef.current.setBearing(heading);
+        const arrow = document.getElementById('user-heading-arrow');
+        if (arrow) arrow.style.transform = `rotate(${heading}deg)`;
+      }
+    };
+
+    window.addEventListener('deviceorientation', handleOrientation);
+    window.addEventListener('deviceorientationabsolute' as any, handleOrientation);
+    return () => {
+      window.removeEventListener('deviceorientation', handleOrientation);
+      window.removeEventListener('deviceorientationabsolute' as any, handleOrientation);
+    };
+  }, [isTracking]);
+
+  useEffect(() => {
+    return () => {
+      if (watchIdRef.current !== null) navigator.geolocation.clearWatch(watchIdRef.current);
+    };
+  }, []);
 
   // Close legend on click away
   useEffect(() => {
@@ -1139,6 +1271,20 @@ export const GardenMap: React.FC = () => {
       {/* Bottom Right Controls */}
       <div className="absolute bottom-8 right-6 md:bottom-10 md:right-10 z-[2000] flex flex-col gap-3 mb-[env(safe-area-inset-bottom)] mr-[env(safe-area-inset-right)]">
         <button 
+          onClick={toggleTracking}
+          className={`w-12 h-12 md:w-14 md:h-14 ${isTracking ? 'bg-blue-600 text-white border-blue-400' : 'bg-zinc-900/80 text-white/80 border-white/10'} hover:bg-opacity-100 backdrop-blur-md border rounded-2xl flex flex-col items-center justify-center transition-all active:scale-95 shadow-2xl group relative overflow-hidden`}
+          title="Track My Location"
+        >
+          {isTracking && (
+            <motion.div 
+              layoutId="tracking-active"
+              className="absolute inset-0 bg-blue-500/20 animate-pulse"
+            />
+          )}
+          <Navigation size={22} className={`${isTracking ? 'fill-current' : ''} group-hover:scale-110 transition-transform`} />
+          <span className="text-[7px] font-black uppercase tracking-[0.1em] mt-1">Live</span>
+        </button>
+        <button 
           onClick={toggleSnapView}
           className="w-12 h-12 md:w-14 md:h-14 bg-zinc-900/80 hover:bg-zinc-800 backdrop-blur-md border border-white/10 rounded-2xl flex items-center justify-center text-white/80 hover:text-white transition-all active:scale-95 shadow-2xl group"
           title="Toggle Top-down / Tilt View"
@@ -1153,6 +1299,32 @@ export const GardenMap: React.FC = () => {
           <Home size={24} className="group-hover:scale-110 transition-transform" />
         </button>
       </div>
+
+      {/* Tracking Notification */}
+      <AnimatePresence>
+        {trackingStatus && (
+          <motion.div
+            initial={{ opacity: 0, y: -20, x: '-50%' }}
+            animate={{ opacity: 1, y: 0, x: '-50%' }}
+            exit={{ opacity: 0, y: -20, x: '-50%' }}
+            className="absolute top-24 left-1/2 z-[9000] px-6 py-4 bg-zinc-900/90 backdrop-blur-xl border border-white/10 rounded-2xl shadow-2xl flex items-center gap-4 min-w-[280px]"
+          >
+            <div className="w-10 h-10 bg-red-500/20 rounded-xl flex items-center justify-center shrink-0">
+              <AlertCircle className="text-red-500" size={24} />
+            </div>
+            <div className="flex-1">
+              <span className="text-[10px] font-bold text-red-500 uppercase tracking-widest block mb-0.5">Location Alert</span>
+              <span className="text-[11px] font-medium text-white block leading-tight">{trackingStatus}</span>
+            </div>
+            <button 
+              onClick={() => setTrackingStatus(null)}
+              className="p-2 hover:bg-white/5 rounded-lg text-white/30 hover:text-white transition-colors"
+            >
+              <X size={18} />
+            </button>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* Instructions Popup */}
       <AnimatePresence>
