@@ -1,7 +1,7 @@
 import React, { useState, useCallback, useEffect, useRef } from 'react';
 import maplibregl from 'maplibre-gl';
 import 'maplibre-gl/dist/maplibre-gl.css';
-import { Leaf, Plus, Map as MapIcon, Info, List, Search, X, ChevronRight, Pencil, ShieldCheck, AlertCircle, Home, Rotate3d, Trash2, Undo, History, Camera, Trash, Clock, Navigation } from 'lucide-react';
+import { Leaf, Plus, Map as MapIcon, Info, List, Search, X, ChevronRight, Pencil, ShieldCheck, AlertCircle, Home, Rotate3d, Trash2, Undo, History, Camera, Trash, Clock, Navigation, Tag, GripVertical, Save, HelpCircle } from 'lucide-react';
 import { PlantMarker, Snapshot } from '../types';
 import { PlantPopup } from './PlantPopup';
 import { motion, AnimatePresence } from 'motion/react';
@@ -298,8 +298,12 @@ const MapComponent: React.FC<MapComponentProps> = ({
         }
 
         if (inner) {
-          inner.className = `flex items-center justify-center transition-transform duration-200 hover:scale-125 active:scale-95 drop-shadow-[0_1px_2px_rgba(0,0,0,1)]`;
+          inner.className = `flex items-center justify-center transition-transform duration-200 hover:scale-125 active:scale-95 drop-shadow-[0_1px_2px_rgba(0,0,0,1)] marker-icon-wrapper`;
           inner.innerHTML = marker.type === 'tree' ? TREE_ICON : PLANT_ICON;
+        }
+
+        if (el) {
+          el.className = 'cursor-pointer marker-hit-area';
         }
 
         if (label) {
@@ -308,11 +312,11 @@ const MapComponent: React.FC<MapComponentProps> = ({
       } else {
         // Create custom marker element
         const el = document.createElement('div');
-        el.className = 'cursor-pointer'; // Base container for MapLibre positioning
+        el.className = 'cursor-pointer marker-hit-area'; // Add marker-hit-area class
         
         // Inner wrapper for visual style and hover effects
         const inner = document.createElement('div');
-        inner.className = `flex items-center justify-center transition-transform duration-200 hover:scale-125 active:scale-95 drop-shadow-[0_1px_2px_rgba(0,0,0,1)]`;
+        inner.className = `flex items-center justify-center transition-transform duration-200 hover:scale-125 active:scale-95 drop-shadow-[0_1px_2px_rgba(0,0,0,1)] marker-icon-wrapper`;
         inner.innerHTML = marker.type === 'tree' ? TREE_ICON : PLANT_ICON;
         el.appendChild(inner);
         
@@ -391,6 +395,22 @@ const MapComponent: React.FC<MapComponentProps> = ({
         .marker-label.occluded {
           opacity: 0 !important;
           pointer-events: none;
+        }
+        .marker-hit-area {
+          display: flex !important;
+          align-items: center;
+          justify-content: center;
+          padding: 14px; /* Slightly more for better mobile feel */
+          border-radius: 9999px;
+          user-select: none;
+          -webkit-tap-highlight-color: transparent;
+        }
+        .marker-icon-wrapper {
+          pointer-events: auto;
+          position: relative;
+        }
+        .marker-label {
+          margin-left: -10px !important; /* Pull label back to original position relative to icon */
         }
       `}</style>
 
@@ -961,29 +981,53 @@ export const GardenMap: React.FC = () => {
                 <MapIcon className="text-emerald-500" size={40} />
               </div>
 
-              <h2 className="text-3xl font-bold text-white mb-4 tracking-tight">Welcome to the Garden</h2>
+               <h2 className="text-3xl font-bold text-white mb-4 tracking-tight">Welcome to the Garden</h2>
               
-              <div className="space-y-6 text-left mb-10">
+              <div className="space-y-6 text-left mb-10 max-h-[45vh] overflow-y-auto pr-2 custom-scrollbar">
                 <div className="flex items-start gap-4">
-                  <div className="w-8 h-8 rounded-full bg-white/5 flex items-center justify-center shrink-0 mt-1">
-                    <span className="text-emerald-500 font-bold text-xs">01</span>
+                  <div className="w-8 h-8 rounded-full bg-emerald-500/10 flex items-center justify-center shrink-0 mt-1">
+                    <MapIcon className="text-emerald-500" size={14} />
                   </div>
                   <div>
-                    <h4 className="text-white font-medium text-sm mb-1">Explore the Space</h4>
-                    <p className="text-gray-400 text-xs leading-relaxed">
-                      Click and drag to pan the map. Use your mouse wheel or pinch to zoom.
+                    <h4 className="text-white font-medium text-sm mb-1">Interactive Map</h4>
+                    <p className="text-gray-400 text-[11px] leading-relaxed">
+                      Explore our nursery and display gardens. Click and drag to pan, use scroll to zoom. Hover over plants to see their names.
                     </p>
                   </div>
                 </div>
 
                 <div className="flex items-start gap-4">
-                  <div className="w-8 h-8 rounded-full bg-white/5 flex items-center justify-center shrink-0 mt-1">
-                    <span className="text-emerald-500 font-bold text-xs">02</span>
+                  <div className="w-8 h-8 rounded-full bg-blue-500/10 flex items-center justify-center shrink-0 mt-1">
+                    <Navigation className="text-blue-400" size={14} />
                   </div>
                   <div>
-                    <h4 className="text-white font-medium text-sm mb-1">Discover Plants</h4>
-                    <p className="text-gray-400 text-xs leading-relaxed">
-                      Click on any leaf icon to view photos and details about the plants.
+                    <h4 className="text-white font-medium text-sm mb-1">Live GPS Tracking</h4>
+                    <p className="text-gray-400 text-[11px] leading-relaxed">
+                      Use the compass icon in the bottom-right to show your current location in the garden. Perfect for finding your way to specific specimens.
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex items-start gap-4">
+                  <div className="w-8 h-8 rounded-full bg-purple-500/10 flex items-center justify-center shrink-0 mt-1">
+                    <Rotate3d className="text-purple-400" size={14} />
+                  </div>
+                  <div>
+                    <h4 className="text-white font-medium text-sm mb-1">Dynamic Views</h4>
+                    <p className="text-gray-400 text-[11px] leading-relaxed">
+                      Toggle between a flat blueprint view and a tilted perspective view using the 3D icon for a better sense of layout and height.
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex items-start gap-4">
+                  <div className="w-8 h-8 rounded-full bg-pink-500/10 flex items-center justify-center shrink-0 mt-1">
+                    <Tag className="text-pink-400" size={14} />
+                  </div>
+                  <div>
+                    <h4 className="text-white font-medium text-sm mb-1">Detailed Plant Profiles</h4>
+                    <p className="text-gray-400 text-[11px] leading-relaxed">
+                      Click icons to open profile cards. These cards adapt to the shape of the plant's photo. You can expand photos to full-screen to see fine details.
                     </p>
                   </div>
                 </div>
@@ -1196,6 +1240,13 @@ export const GardenMap: React.FC = () => {
       {/* Bottom Right Controls */}
       <div className="absolute bottom-8 right-6 md:bottom-10 md:right-10 z-[2000] flex flex-col gap-3 mb-[env(safe-area-inset-bottom)] mr-[env(safe-area-inset-right)]">
         <button 
+          onClick={() => setShowWelcome(true)}
+          className="w-12 h-12 md:w-14 md:h-14 bg-zinc-900/80 hover:bg-zinc-800 backdrop-blur-md border border-white/10 rounded-2xl flex items-center justify-center text-white/60 hover:text-white transition-all active:scale-95 shadow-2xl group"
+          title="Show Welcome & Instructions"
+        >
+          <HelpCircle size={24} className="group-hover:scale-110 transition-transform" />
+        </button>
+        <button 
           onClick={toggleTracking}
           className={`w-12 h-12 md:w-14 md:h-14 backdrop-blur-md border rounded-2xl flex items-center justify-center transition-all active:scale-95 shadow-2xl group ${
             isTracking 
@@ -1235,7 +1286,7 @@ export const GardenMap: React.FC = () => {
               <div className="absolute -top-24 -right-24 w-48 h-48 bg-emerald-500/10 rounded-full blur-3xl pointer-events-none" />
               
               <div className="flex items-center justify-between mb-6">
-                <h2 className="text-2xl font-bold text-white tracking-tight">How to Edit</h2>
+                <h2 className="text-2xl font-bold text-white tracking-tight">Expert Garden Editor</h2>
                 <button 
                   onClick={() => setShowInstructions(false)}
                   className="p-2 hover:bg-white/5 rounded-full text-white/40 hover:text-white transition-colors"
@@ -1244,39 +1295,54 @@ export const GardenMap: React.FC = () => {
                 </button>
               </div>
               
-              <div className="space-y-4 mb-8 max-h-[50vh] overflow-y-auto pr-2 custom-scrollbar">
-                <div className="p-4 bg-white/5 rounded-2xl border border-white/5">
-                  <h4 className="text-emerald-400 font-bold text-[10px] uppercase tracking-widest mb-2">Adding Trees & Plants</h4>
-                  <p className="text-gray-300 text-xs leading-relaxed">
-                    Click the <span className="text-emerald-400 font-bold">"Add New Tree"</span> button. A new marker will drop exactly at the center of your screen. 
+              <div className="space-y-4 mb-8 max-h-[55vh] overflow-y-auto pr-2 custom-scrollbar">
+                <div className="p-4 bg-white/5 rounded-2xl border border-white/5 group hover:border-emerald-500/30 transition-colors">
+                  <div className="flex items-center gap-2 mb-2">
+                    <Plus className="text-emerald-400" size={16} />
+                    <h4 className="text-white font-bold text-[10px] uppercase tracking-widest">Adding Specimens</h4>
+                  </div>
+                  <p className="text-gray-400 text-[11px] leading-relaxed">
+                    New plants drop exactly at the <span className="text-white">center crosshair</span> of your screen. Pan the map so the crosshair is over the desired location before clicking "Add New Tree".
                   </p>
                 </div>
 
-                <div className="p-4 bg-white/5 rounded-2xl border border-white/5">
-                  <h4 className="text-emerald-400 font-bold text-[10px] uppercase tracking-widest mb-2">Moving & Reverting</h4>
-                  <p className="text-gray-300 text-xs leading-relaxed">
-                    <span className="text-emerald-400 font-bold">Drag and drop</span> any icon to reposition it. If you move something by mistake, click the <span className="text-emerald-400 font-bold italic">"Undo Move"</span> button that appears in the sidebar.
+                <div className="p-4 bg-white/5 rounded-2xl border border-white/5 group hover:border-blue-500/30 transition-colors">
+                  <div className="flex items-center gap-2 mb-2">
+                    <GripVertical className="text-blue-400" size={16} />
+                    <h4 className="text-white font-bold text-[10px] uppercase tracking-widest">Precise Positioning</h4>
+                  </div>
+                  <p className="text-gray-400 text-[11px] leading-relaxed">
+                    Once dropped, icons are <span className="text-white">draggable</span>. Click and hold to move. If you make a mistake, use the <span className="text-white">Undo Move</span> button to revert to the previous coordinate.
                   </p>
                 </div>
 
-                <div className="p-4 bg-white/5 rounded-2xl border border-white/5">
-                  <h4 className="text-emerald-400 font-bold text-[10px] uppercase tracking-widest mb-2">Backups & Restore</h4>
-                  <p className="text-gray-300 text-xs leading-relaxed">
-                    Use the <span className="text-emerald-400 font-bold">"Backups"</span> panel to save snapshots of your entire garden. You can restore an old backup at any time to undo major changes or deletions.
+                <div className="p-4 bg-white/5 rounded-2xl border border-white/5 group hover:border-purple-500/30 transition-colors">
+                  <div className="flex items-center gap-2 mb-2">
+                    <Save className="text-purple-400" size={16} />
+                    <h4 className="text-white font-bold text-[10px] uppercase tracking-widest">Photo Curation</h4>
+                  </div>
+                  <p className="text-gray-400 text-[11px] leading-relaxed">
+                    Open a plant card to upload up to 5 photos. <span className="text-white">Drag the thumbnails</span> to reorder. The first photo becomes the "Hero" shot and determines the card's visual shape.
                   </p>
                 </div>
 
-                <div className="p-4 bg-white/5 rounded-2xl border border-white/5">
-                  <h4 className="text-emerald-400 font-bold text-[10px] uppercase tracking-widest mb-2">Editing Details</h4>
-                  <p className="text-gray-300 text-xs leading-relaxed">
-                    Click an icon to open its popup. You can change names, types, add descriptions, and upload up to 5 photos. <span className="text-emerald-400 font-bold">Drag photos</span> to reorder them; the first one is the "Main" display photo.
+                <div className="p-4 bg-white/5 rounded-2xl border border-white/5 group hover:border-pink-500/30 transition-colors">
+                  <div className="flex items-center gap-2 mb-2">
+                    <History className="text-pink-400" size={16} />
+                    <h4 className="text-white font-bold text-[10px] uppercase tracking-widest">Version Control</h4>
+                  </div>
+                  <p className="text-gray-400 text-[11px] leading-relaxed">
+                    The <span className="text-white">Backups</span> panel allows you to snapshot the entire garden state. Restore any snapshot to instantly undo mass deletions or unintended changes.
                   </p>
                 </div>
 
-                <div className="p-4 bg-white/5 rounded-2xl border border-white/5">
-                  <h4 className="text-emerald-400 font-bold text-[10px] uppercase tracking-widest mb-2">Navigation</h4>
-                  <p className="text-gray-300 text-xs leading-relaxed">
-                    Use the bottom-right buttons to toggle between <span className="text-emerald-400 font-bold text-nowrap">Tilt View (3D)</span> and Top-down view, or to quickly jump back to the center of the garden.
+                <div className="p-4 bg-white/5 rounded-2xl border border-white/5 group hover:border-orange-500/30 transition-colors">
+                  <div className="flex items-center gap-2 mb-2">
+                    <Navigation className="text-orange-400" size={16} />
+                    <h4 className="text-white font-bold text-[10px] uppercase tracking-widest">Live Verification</h4>
+                  </div>
+                  <p className="text-gray-400 text-[11px] leading-relaxed">
+                    Enable <span className="text-white">GPS Tracking</span> while on-site to verify plant locations in the real world against their digital positions.
                   </p>
                 </div>
               </div>
