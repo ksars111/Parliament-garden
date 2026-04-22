@@ -298,12 +298,8 @@ const MapComponent: React.FC<MapComponentProps> = ({
         }
 
         if (inner) {
-          inner.className = `flex items-center justify-center transition-transform duration-200 hover:scale-125 active:scale-95 drop-shadow-[0_1px_2px_rgba(0,0,0,1)] marker-icon-wrapper`;
+          inner.className = `flex items-center justify-center transition-transform duration-200 hover:scale-125 active:scale-95 drop-shadow-[0_1px_2px_rgba(0,0,0,1)]`;
           inner.innerHTML = marker.type === 'tree' ? TREE_ICON : PLANT_ICON;
-        }
-
-        if (el) {
-          el.className = 'cursor-pointer marker-hit-area';
         }
 
         if (label) {
@@ -312,11 +308,11 @@ const MapComponent: React.FC<MapComponentProps> = ({
       } else {
         // Create custom marker element
         const el = document.createElement('div');
-        el.className = 'cursor-pointer marker-hit-area'; // Add marker-hit-area class
+        el.className = 'cursor-pointer'; // Base container for MapLibre positioning
         
         // Inner wrapper for visual style and hover effects
         const inner = document.createElement('div');
-        inner.className = `flex items-center justify-center transition-transform duration-200 hover:scale-125 active:scale-95 drop-shadow-[0_1px_2px_rgba(0,0,0,1)] marker-icon-wrapper`;
+        inner.className = `flex items-center justify-center transition-transform duration-200 hover:scale-125 active:scale-95 drop-shadow-[0_1px_2px_rgba(0,0,0,1)]`;
         inner.innerHTML = marker.type === 'tree' ? TREE_ICON : PLANT_ICON;
         el.appendChild(inner);
         
@@ -395,22 +391,6 @@ const MapComponent: React.FC<MapComponentProps> = ({
         .marker-label.occluded {
           opacity: 0 !important;
           pointer-events: none;
-        }
-        .marker-hit-area {
-          display: flex !important;
-          align-items: center;
-          justify-content: center;
-          padding: 14px; /* Slightly more for better mobile feel */
-          border-radius: 9999px;
-          user-select: none;
-          -webkit-tap-highlight-color: transparent;
-        }
-        .marker-icon-wrapper {
-          pointer-events: auto;
-          position: relative;
-        }
-        .marker-label {
-          margin-left: -10px !important; /* Pull label back to original position relative to icon */
         }
       `}</style>
 
