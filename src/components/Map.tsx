@@ -1,7 +1,7 @@
 import React, { useState, useCallback, useEffect, useRef } from 'react';
 import maplibregl from 'maplibre-gl';
 import 'maplibre-gl/dist/maplibre-gl.css';
-import { Leaf, Plus, Map as MapIcon, Info, List, Search, X, ChevronRight, Pencil, ShieldCheck, AlertCircle, Home, Rotate3d, Trash2, Undo, History, Camera, Trash, Clock, Navigation, Tag, GripVertical, Save, HelpCircle } from 'lucide-react';
+import { Leaf, Plus, Map as MapIcon, Info, List, Search, X, ChevronRight, Pencil, ShieldCheck, AlertCircle, Home, Rotate3d, Trash2, Undo, History, Camera, Trash, Clock, Navigation, Tag, GripVertical, Save, HelpCircle, ExternalLink, Link } from 'lucide-react';
 import { PlantMarker, Snapshot } from '../types';
 import { PlantPopup } from './PlantPopup';
 import { motion, AnimatePresence } from 'motion/react';
@@ -50,6 +50,13 @@ interface MapComponentProps {
 
 const TREE_ICON = `<svg viewBox="0 0 24 24" width="24" height="24" fill="#86efac" xmlns="http://www.w3.org/2000/svg"><path d="M19.2,11.5c0-2.2-1.8-4-4-4c-0.1,0-0.2,0-0.3,0c-0.6-1.5-2.1-2.6-3.8-2.6c-2.3,0-4.2,1.9-4.2,4.2c0,0.1,0,0.2,0,0.3c-0.9,0.5-1.5,1.5-1.5,2.6c0,1.7,1.4,3.1,3.1,3.1h0.2l-1,4.9h8l-1-4.9h0.4c1.7,0,3.1-1.4,3.1-3.1Z M12,15l-1.5-3h3L12,15Z M10,12l-1-1.5h1L10,12Z M14,12l1-1.5h-1L14,12Z"/></svg>`;
 const PLANT_ICON = `<svg viewBox="0 0 24 24" width="20" height="20" fill="#f472b6" xmlns="http://www.w3.org/2000/svg"><path d="M12,22c0,0-3.5-10-1-18c2.5,8,1,18,1,18Z M12,22c0,0-7-8-3-14c4,6,3,14,3,14Z M12,22c0,0,7-8,3-14c-4,6-3,14-3,14Z M12,22c0,0-9-5-5-10c4,5,5,10,5,10Z M12,22c0,0,9-5,5-10c-4,5-5,10-5,10Z"/></svg>`;
+const LINK_ICON = `<svg viewBox="0 0 24 24" width="20" height="20" fill="#60a5fa" xmlns="http://www.w3.org/2000/svg"><path d="M10,13a5,5,0,0,0,7.54.54l3-3a5,5,0,0,0-7.07-7.07l-1.72,1.71" fill="none" stroke="#60a5fa" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M14,11a5,5,0,0,0-7.54-.54l-3,3a5,5,0,0,0,7.07,7.07l1.71-1.71" fill="none" stroke="#60a5fa" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
+
+const getIcon = (type: string) => {
+  if (type === 'tree') return TREE_ICON;
+  if (type === 'plant') return PLANT_ICON;
+  return LINK_ICON;
+};
 
 const MapComponent: React.FC<MapComponentProps> = ({ 
   markers, 
@@ -71,6 +78,23 @@ const MapComponent: React.FC<MapComponentProps> = ({
   const markersLayerRef = useRef<Record<string, maplibregl.Marker>>({});
   const rafRef = useRef<number | null>(null);
   const hasInitialFit = useRef(false);
+
+  // Refs to avoid closure staleness in event listeners
+  const canEditRef = useRef(canEdit);
+  const onMarkerClickRef = useRef(onMarkerClick);
+  const markersRef = useRef(markers);
+
+  useEffect(() => {
+    canEditRef.current = canEdit;
+  }, [canEdit]);
+
+  useEffect(() => {
+    onMarkerClickRef.current = onMarkerClick;
+  }, [onMarkerClick]);
+
+  useEffect(() => {
+    markersRef.current = markers;
+  }, [markers]);
 
   // updateMarkerZIndices
   const updateMarkerZIndices = useCallback(() => {
@@ -299,7 +323,7 @@ const MapComponent: React.FC<MapComponentProps> = ({
 
         if (inner) {
           inner.className = `flex items-center justify-center transition-transform duration-200 hover:scale-125 active:scale-95 drop-shadow-[0_1px_2px_rgba(0,0,0,1)]`;
-          inner.innerHTML = marker.type === 'tree' ? TREE_ICON : PLANT_ICON;
+          inner.innerHTML = getIcon(marker.type);
         }
 
         if (label) {
@@ -313,7 +337,7 @@ const MapComponent: React.FC<MapComponentProps> = ({
         // Inner wrapper for visual style and hover effects
         const inner = document.createElement('div');
         inner.className = `flex items-center justify-center transition-transform duration-200 hover:scale-125 active:scale-95 drop-shadow-[0_1px_2px_rgba(0,0,0,1)]`;
-        inner.innerHTML = marker.type === 'tree' ? TREE_ICON : PLANT_ICON;
+        inner.innerHTML = getIcon(marker.type);
         el.appendChild(inner);
         
         // Add label
@@ -333,7 +357,16 @@ const MapComponent: React.FC<MapComponentProps> = ({
         // Click handler
         el.addEventListener('click', (e) => {
           e.stopPropagation();
-          onMarkerClick(marker);
+          // Find latest marker data from ref to avoid closure issues
+          const latestMarker = markersRef.current.find(m => m.id === marker.id);
+          if (!latestMarker) return;
+
+          // If it's a link and we are not in edit mode, open the link directly
+          if (latestMarker.type === 'link' && !canEditRef.current && latestMarker.url) {
+            window.open(latestMarker.url, '_blank');
+          } else {
+            onMarkerClickRef.current(latestMarker);
+          }
         });
 
         // Drag handlers
@@ -1001,6 +1034,18 @@ export const GardenMap: React.FC = () => {
                 </div>
 
                 <div className="flex items-start gap-4">
+                  <div className="w-8 h-8 rounded-full bg-blue-400/10 flex items-center justify-center shrink-0 mt-1">
+                    <Link className="text-blue-400" size={14} />
+                  </div>
+                  <div>
+                    <h4 className="text-white font-medium text-sm mb-1">Web Portals</h4>
+                    <p className="text-gray-400 text-[11px] leading-relaxed">
+                      Look for blue link icons to jump to external websites, store pages, or educational resources directly from the map.
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex items-start gap-4">
                   <div className="w-8 h-8 rounded-full bg-pink-500/10 flex items-center justify-center shrink-0 mt-1">
                     <Tag className="text-pink-400" size={14} />
                   </div>
@@ -1130,12 +1175,8 @@ export const GardenMap: React.FC = () => {
                         onClick={() => zoomToMarker(marker)}
                         className="w-full text-left p-3 hover:bg-white/5 rounded-xl transition-colors group flex items-center gap-3"
                       >
-                        <div className={`w-3 h-3 flex items-center justify-center shrink-0 ${marker.type === 'tree' ? 'text-green-300' : 'text-pink-400'} drop-shadow-[0_1px_1px_rgba(0,0,0,0.5)]`}>
-                          {marker.type === 'tree' ? (
-                            <div dangerouslySetInnerHTML={{ __html: TREE_ICON.replace('width="24"', 'width="12"').replace('height="24"', 'height="12"') }} />
-                          ) : (
-                            <div dangerouslySetInnerHTML={{ __html: PLANT_ICON.replace('width="20"', 'width="12"').replace('height="20"', 'height="12"') }} />
-                          )}
+                        <div className={`w-3 h-3 flex items-center justify-center shrink-0 ${marker.type === 'tree' ? 'text-green-300' : marker.type === 'plant' ? 'text-pink-400' : 'text-blue-400'} drop-shadow-[0_1px_1px_rgba(0,0,0,0.5)]`}>
+                          <div dangerouslySetInnerHTML={{ __html: getIcon(marker.type).replace('width="24"', 'width="12"').replace('height="24"', 'height="12"').replace('width="20"', 'width="12"').replace('height="20"', 'height="12"') }} />
                         </div>
                         <div className="flex-1 overflow-hidden">
                           <div className="text-white text-xs font-medium truncate group-hover:text-emerald-400 transition-colors">
@@ -1313,6 +1354,16 @@ export const GardenMap: React.FC = () => {
                   </div>
                   <p className="text-gray-400 text-[11px] leading-relaxed">
                     The <span className="text-white">Backups</span> panel allows you to snapshot the entire garden state. Restore any snapshot to instantly undo mass deletions or unintended changes.
+                  </p>
+                </div>
+
+                <div className="p-4 bg-white/5 rounded-2xl border border-white/5 group hover:border-blue-400/30 transition-colors">
+                  <div className="flex items-center gap-2 mb-2">
+                    <Link className="text-blue-400" size={16} />
+                    <h4 className="text-white font-bold text-[10px] uppercase tracking-widest">Web Linking</h4>
+                  </div>
+                  <p className="text-gray-400 text-[11px] leading-relaxed">
+                    Choose the <span className="text-white">Link</span> type to create an interactive portal. Specify a URL and a label; in view mode, clicking the icon will jump straight to the external website.
                   </p>
                 </div>
 

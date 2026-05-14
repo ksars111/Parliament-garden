@@ -15,7 +15,8 @@ export interface PlantMarker {
   imageLabel?: string;
   images?: PlantImage[];
   createdAt: number;
-  type: 'tree' | 'plant';
+  type: 'tree' | 'plant' | 'link';
+  url?: string;
 }
 
 export interface Snapshot {

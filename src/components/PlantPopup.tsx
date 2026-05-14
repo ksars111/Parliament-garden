@@ -1,5 +1,5 @@
 import React, { useState, useRef } from 'react';
-import { X, Camera, Maximize2, ChevronLeft, ChevronRight, GripVertical, ImageUp, RotateCcw, Info, Trash2, Save, Upload, Tag, Plus as PlusIcon } from 'lucide-react';
+import { X, Camera, Maximize2, ChevronLeft, ChevronRight, GripVertical, ImageUp, RotateCcw, Info, Trash2, Save, Upload, Tag, Plus as PlusIcon, ExternalLink, Link } from 'lucide-react';
 import { PlantMarker, PlantImage } from '../types';
 import { motion, AnimatePresence, Reorder } from 'motion/react';
 import { uploadImage } from '../lib/cloudinary';
@@ -25,6 +25,7 @@ export const PlantPopup: React.FC<PlantPopupProps> = ({ marker, onSave, onDelete
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
   const [direction, setDirection] = useState(0);
   const [type, setType] = useState(marker.type);
+  const [url, setUrl] = useState(marker.url || '');
   const [aspectRatios, setAspectRatios] = useState<Record<string, number>>({});
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isPhotoFocus, setIsPhotoFocus] = useState(false);
@@ -52,6 +53,7 @@ export const PlantPopup: React.FC<PlantPopupProps> = ({ marker, onSave, onDelete
     setImageLabel(marker.imageLabel || '');
     setImages(marker.images?.map(img => typeof img === 'string' ? { url: img } : img) || []);
     setType(marker.type);
+    setUrl(marker.url || '');
   }, [marker]);
 
   // Auto-save effect
@@ -65,7 +67,8 @@ export const PlantPopup: React.FC<PlantPopupProps> = ({ marker, onSave, onDelete
       imageUrl === marker.imageUrl &&
       imageLabel === (marker.imageLabel || '') &&
       JSON.stringify(images) === JSON.stringify(marker.images || []) &&
-      type === marker.type
+      type === marker.type &&
+      url === (marker.url || '')
     ) {
       setIsSaving(false);
       return;
@@ -78,7 +81,7 @@ export const PlantPopup: React.FC<PlantPopupProps> = ({ marker, onSave, onDelete
     }
 
     saveTimeoutRef.current = setTimeout(() => {
-      onSave({ ...marker, name, botanicalName, description, imageUrl, imageLabel, images, type });
+      onSave({ ...marker, name, botanicalName, description, imageUrl, imageLabel, images, type, url });
       setIsSaving(false);
     }, 1000);
 
@@ -368,7 +371,24 @@ export const PlantPopup: React.FC<PlantPopupProps> = ({ marker, onSave, onDelete
               <div className="flex gap-2">
                 <button onClick={() => setType('plant')} className={`flex-1 py-1.5 rounded-lg text-xs font-bold uppercase ${type === 'plant' ? 'bg-pink-400 text-white' : 'bg-gray-100 text-gray-400'}`}>Plant</button>
                 <button onClick={() => setType('tree')} className={`flex-1 py-1.5 rounded-lg text-xs font-bold uppercase ${type === 'tree' ? 'bg-green-400 text-white' : 'bg-gray-100 text-gray-400'}`}>Tree</button>
+                <button onClick={() => setType('link')} className={`flex-1 py-1.5 rounded-lg text-xs font-bold uppercase ${type === 'link' ? 'bg-blue-400 text-white' : 'bg-gray-100 text-gray-400'}`}>Link</button>
               </div>
+              
+              {type === 'link' && (
+                <div className="space-y-2 bg-blue-50/50 p-3 rounded-xl border border-blue-100">
+                  <div className="flex items-center gap-2 text-blue-500 mb-1">
+                    <Link size={14} />
+                    <span className="text-[10px] font-bold uppercase tracking-widest">Web Link Configuration</span>
+                  </div>
+                  <input 
+                    value={url} 
+                    onChange={(e) => setUrl(e.target.value)} 
+                    className="w-full text-xs bg-white rounded-lg px-3 py-2 border border-blue-100 focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 transition-all outline-none" 
+                    placeholder="https://example.com" 
+                  />
+                  <p className="text-[9px] text-blue-400 italic">This link will open in a new tab when the icon is clicked in view mode.</p>
+                </div>
+              )}
               <input value={name} onChange={(e) => setName(e.target.value)} className="w-full font-bold text-lg bg-transparent border-none p-0 focus:ring-0" placeholder="Name" />
               <input value={botanicalName} onChange={(e) => setBotanicalName(e.target.value)} className="w-full italic text-sm text-gray-500 bg-transparent border-none p-0 focus:ring-0" placeholder="Botanical Name" />
               <textarea value={description} onChange={(e) => setDescription(e.target.value)} rows={3} className="w-full text-sm text-gray-600 bg-gray-50 rounded-xl p-3 border-none focus:ring-emerald-500/20 resize-none" placeholder="Description..." />
@@ -446,10 +466,25 @@ export const PlantPopup: React.FC<PlantPopupProps> = ({ marker, onSave, onDelete
               <div className="flex-1 space-y-4">
                 <div className="flex justify-between items-start">
                   <div>
-                    <h3 className="text-xl font-bold text-gray-900">{name || 'Unnamed'}</h3>
+                    <h3 className="text-xl font-bold text-gray-900 flex items-center gap-2">
+                      {name || 'Unnamed'}
+                      {type === 'link' && marker.url && (
+                        <button 
+                          onClick={() => window.open(marker.url, '_blank')}
+                          className="p-1.5 bg-blue-50 text-blue-500 rounded-lg hover:bg-blue-100 transition-all active:scale-90"
+                          title="Open Link"
+                        >
+                          <ExternalLink size={14} />
+                        </button>
+                      )}
+                    </h3>
                     {botanicalName && <p className="text-sm italic text-gray-500 mt-0.5">{botanicalName}</p>}
                   </div>
-                  <span className={`text-[10px] font-bold uppercase tracking-widest px-2.5 py-1 rounded-md ${type === 'tree' ? 'bg-green-100 text-green-700' : 'bg-pink-100 text-pink-600'}`}>{type}</span>
+                  <span className={`text-[10px] font-bold uppercase tracking-widest px-2.5 py-1 rounded-md ${
+                    type === 'tree' ? 'bg-green-100 text-green-700' : 
+                    type === 'plant' ? 'bg-pink-100 text-pink-600' : 
+                    'bg-blue-100 text-blue-700'
+                  }`}>{type}</span>
                 </div>
                 <p className="text-sm text-gray-600 leading-relaxed mb-6">
                   {description ? (
