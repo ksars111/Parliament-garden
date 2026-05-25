@@ -16,11 +16,15 @@ export const PlantPopup: React.FC<PlantPopupProps> = ({ marker, onSave, onDelete
   const [name, setName] = useState(marker.name);
   const [botanicalName, setBotanicalName] = useState(marker.botanicalName || '');
   const [description, setDescription] = useState(marker.description);
-  const [imageUrl, setImageUrl] = useState(marker.imageUrl);
-  const [imageLabel, setImageLabel] = useState(marker.imageLabel || '');
-  const [images, setImages] = useState<PlantImage[]>(() => {
-    if (!marker.images) return [];
-    return marker.images.map(img => typeof img === 'string' ? { url: img } : img);
+  const [localImages, setLocalImages] = useState<PlantImage[]>(() => {
+    const initImages: PlantImage[] = [];
+    if (marker.imageUrl) {
+      initImages.push({ url: marker.imageUrl, label: marker.imageLabel || '' });
+    }
+    if (marker.images) {
+      initImages.push(...marker.images.map(img => typeof img === 'string' ? { url: img } : img));
+    }
+    return initImages;
   });
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
   const [direction, setDirection] = useState(0);
@@ -39,19 +43,21 @@ export const PlantPopup: React.FC<PlantPopupProps> = ({ marker, onSave, onDelete
   const lastTouchDistance = useRef<number | null>(null);
   const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
-  const allImages = [
-    imageUrl ? { url: imageUrl, label: imageLabel } : null,
-    ...images
-  ].filter((img): img is PlantImage => img !== null);
+  const allImages = localImages;
 
   // Sync state when marker changes
   React.useEffect(() => {
     setName(marker.name);
     setBotanicalName(marker.botanicalName || '');
     setDescription(marker.description);
-    setImageUrl(marker.imageUrl);
-    setImageLabel(marker.imageLabel || '');
-    setImages(marker.images?.map(img => typeof img === 'string' ? { url: img } : img) || []);
+    const initImages: PlantImage[] = [];
+    if (marker.imageUrl) {
+      initImages.push({ url: marker.imageUrl, label: marker.imageLabel || '' });
+    }
+    if (marker.images) {
+      initImages.push(...marker.images.map(img => typeof img === 'string' ? { url: img } : img));
+    }
+    setLocalImages(initImages);
     setType(marker.type);
     setUrl(marker.url || '');
   }, [marker]);
@@ -60,13 +66,18 @@ export const PlantPopup: React.FC<PlantPopupProps> = ({ marker, onSave, onDelete
   React.useEffect(() => {
     if (!canEdit) return;
 
+    const currentHeroUrl = localImages[0]?.url || '';
+    const currentHeroLabel = localImages[0]?.label || '';
+    const currentOtherImages = localImages.slice(1);
+    const markerImages = marker.images?.map(img => typeof img === 'string' ? { url: img } : img) || [];
+
     if (
       name === marker.name &&
       botanicalName === (marker.botanicalName || '') &&
       description === marker.description &&
-      imageUrl === marker.imageUrl &&
-      imageLabel === (marker.imageLabel || '') &&
-      JSON.stringify(images) === JSON.stringify(marker.images || []) &&
+      currentHeroUrl === (marker.imageUrl || '') &&
+      currentHeroLabel === (marker.imageLabel || '') &&
+      JSON.stringify(currentOtherImages) === JSON.stringify(markerImages) &&
       type === marker.type &&
       url === (marker.url || '')
     ) {
@@ -81,7 +92,21 @@ export const PlantPopup: React.FC<PlantPopupProps> = ({ marker, onSave, onDelete
     }
 
     saveTimeoutRef.current = setTimeout(() => {
-      onSave({ ...marker, name, botanicalName, description, imageUrl, imageLabel, images, type, url });
+      const heroUrl = localImages[0]?.url || '';
+      const heroLabel = localImages[0]?.label || '';
+      const otherImages = localImages.slice(1);
+
+      onSave({ 
+        ...marker, 
+        name, 
+        botanicalName, 
+        description, 
+        imageUrl: heroUrl, 
+        imageLabel: heroLabel, 
+        images: otherImages, 
+        type, 
+        url 
+      });
       setIsSaving(false);
     }, 1000);
 
@@ -90,7 +115,7 @@ export const PlantPopup: React.FC<PlantPopupProps> = ({ marker, onSave, onDelete
         clearTimeout(saveTimeoutRef.current);
       }
     };
-  }, [name, botanicalName, description, imageUrl, imageLabel, images, type, marker, onSave, canEdit]);
+  }, [name, botanicalName, description, localImages, type, url, marker, onSave, canEdit]);
 
   // Reset zoom when switching images
   React.useEffect(() => {
@@ -170,11 +195,7 @@ export const PlantPopup: React.FC<PlantPopupProps> = ({ marker, onSave, onDelete
       
       try {
         const cloudUrl = await uploadImage(file);
-        if (!imageUrl) {
-          setImageUrl(cloudUrl);
-        } else {
-          setImages(prev => [...prev, { url: cloudUrl }]);
-        }
+        setLocalImages(prev => [...prev, { url: cloudUrl }]);
       } catch (err) {
         console.error("Upload failed:", err);
         setError(err instanceof Error ? err.message : "Failed to upload image.");
@@ -197,16 +218,7 @@ export const PlantPopup: React.FC<PlantPopupProps> = ({ marker, onSave, onDelete
   };
 
   const handleReorder = (newOrder: PlantImage[]) => {
-    if (newOrder.length === 0) {
-      setImageUrl('');
-      setImageLabel('');
-      setImages([]);
-      return;
-    }
-    const hero = newOrder[0];
-    setImageUrl(hero.url);
-    setImageLabel(hero.label || '');
-    setImages(newOrder.slice(1));
+    setLocalImages(newOrder);
   };
 
   const isConfigured = import.meta.env.VITE_CLOUDINARY_CLOUD_NAME && import.meta.env.VITE_CLOUDINARY_UPLOAD_PRESET;
@@ -238,14 +250,10 @@ export const PlantPopup: React.FC<PlantPopupProps> = ({ marker, onSave, onDelete
       >
         <motion.div 
           layout
-          className="relative shrink-0 bg-gray-100 group overflow-hidden transition-all duration-500 ease-in-out"
-          style={{ 
-            aspectRatio: aspectRatios[allImages[currentImageIndex]?.url] || '1/1',
-            maxHeight: '65vh'
-          }}
+          className="relative shrink-0 bg-neutral-950 group overflow-hidden transition-all duration-500 ease-in-out aspect-[4/3] w-full"
         >
           {allImages.length > 0 ? (
-            <div className="relative w-full h-full">
+            <div className="relative w-full h-full bg-neutral-950">
               <AnimatePresence mode="popLayout" initial={false} custom={direction}>
                 <motion.div
                   key={allImages[currentImageIndex].url}
@@ -268,11 +276,16 @@ export const PlantPopup: React.FC<PlantPopupProps> = ({ marker, onSave, onDelete
                   className="w-full h-full relative overflow-hidden cursor-pointer"
                   onClick={openPhotoFocus}
                 >
+                  {/* Premium blurred ambient background to pad different aspect ratios */}
+                  <div 
+                    className="absolute inset-0 bg-cover bg-center scale-115 blur-xl opacity-35 select-none pointer-events-none"
+                    style={{ backgroundImage: `url(${allImages[currentImageIndex].url})` }}
+                  />
                   <img 
                     src={allImages[currentImageIndex].url} 
                     alt={name} 
                     onLoad={(e) => handleImageLoad(allImages[currentImageIndex].url, e)}
-                    className={`w-full h-full object-contain transition-opacity duration-300 ${isUploading ? 'opacity-50' : 'opacity-100'}`}
+                    className={`relative z-10 w-full h-full object-contain transition-opacity duration-300 ${isUploading ? 'opacity-50' : 'opacity-100'}`}
                     referrerPolicy="no-referrer"
                     draggable={false}
                   />
@@ -545,6 +558,11 @@ export const PlantPopup: React.FC<PlantPopupProps> = ({ marker, onSave, onDelete
                         transition={{ duration: 0.4 }}
                         className="w-full h-full relative"
                       >
+                        {/* Premium blurred ambient background for full screen slideshow details */}
+                        <div 
+                          className="absolute inset-0 bg-cover bg-center scale-110 blur-2xl opacity-25 select-none pointer-events-none"
+                          style={{ backgroundImage: `url(${allImages[currentImageIndex].url})` }}
+                        />
                         <motion.img 
                           src={allImages[currentImageIndex].url} 
                           alt={name} 
@@ -553,7 +571,7 @@ export const PlantPopup: React.FC<PlantPopupProps> = ({ marker, onSave, onDelete
                           dragMomentum={false}
                           dragElastic={0}
                           onDragEnd={(_, info) => setZoomPosition(prev => ({ x: prev.x + info.offset.x, y: prev.y + info.offset.y }))}
-                          className="w-full h-full object-contain"
+                          className="relative z-10 w-full h-full object-contain"
                           referrerPolicy="no-referrer"
                         />
                         {allImages[currentImageIndex].label && (
