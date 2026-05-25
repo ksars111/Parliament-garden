@@ -1359,13 +1359,13 @@ export const GardenMap: React.FC = () => {
                   </p>
                 </div>
 
-                <div className="p-4 bg-white/5 rounded-2xl border border-white/5 group hover:border-blue-500/30 transition-colors">
+                <div className="p-4 bg-white/5 rounded-2xl border border-white/5 group hover:border-amber-500/30 transition-colors">
                   <div className="flex items-center gap-2 mb-2">
-                    <GripVertical className="text-blue-400" size={16} />
+                    <Navigation className="text-amber-400" size={16} />
                     <h4 className="text-white font-bold text-[10px] uppercase tracking-widest">Precise Positioning</h4>
                   </div>
                   <p className="text-gray-400 text-[11px] leading-relaxed">
-                    Once dropped, icons are <span className="text-white">draggable</span>. Click and hold to move. If you make a mistake, use the <span className="text-white">Undo Move</span> button to revert to the previous coordinate.
+                    To prevent accidental moves on phones, icons are locked by default. Open a specimen's card and click <span className="text-white">Move</span> to enable dragging. Relocate the icon, then choose <span className="text-white">Save New Position</span> or <span className="text-white">Cancel</span>.
                   </p>
                 </div>
 
@@ -1533,7 +1533,7 @@ export const GardenMap: React.FC = () => {
               </div>
               <h2 className="text-2xl font-semibold text-white mb-2">Enter Edit Mode?</h2>
               <p className="text-gray-400 mb-8 text-sm leading-relaxed">
-                You will be able to add new plants and move existing ones around the garden.
+                You can add new plants and reposition existing ones securely. Dragging requires clicking "Move" first, which safeguards against accidental touch gestures on mobile.
               </p>
               <div className="flex flex-col gap-3">
                 <button 
