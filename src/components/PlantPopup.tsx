@@ -1,5 +1,5 @@
 import React, { useState, useRef } from 'react';
-import { X, Camera, Maximize2, ChevronLeft, ChevronRight, GripVertical, ImageUp, RotateCcw, Info, Trash2, Save, Upload, Tag, Plus as PlusIcon, ExternalLink, Link } from 'lucide-react';
+import { X, Camera, Maximize2, ChevronLeft, ChevronRight, GripVertical, ImageUp, RotateCcw, Info, Trash2, Save, Upload, Tag, Plus as PlusIcon, ExternalLink, Link, Navigation } from 'lucide-react';
 import { PlantMarker, PlantImage } from '../types';
 import { motion, AnimatePresence, Reorder } from 'motion/react';
 import { uploadImage } from '../lib/cloudinary';
@@ -10,9 +10,17 @@ interface PlantPopupProps {
   onDelete: (id: string) => void;
   onClose: () => void;
   canEdit?: boolean;
+  onStartReposition?: () => void;
 }
 
-export const PlantPopup: React.FC<PlantPopupProps> = ({ marker, onSave, onDelete, onClose, canEdit = false }) => {
+export const PlantPopup: React.FC<PlantPopupProps> = ({ 
+  marker, 
+  onSave, 
+  onDelete, 
+  onClose, 
+  canEdit = false,
+  onStartReposition
+}) => {
   const [name, setName] = useState(marker.name);
   const [botanicalName, setBotanicalName] = useState(marker.botanicalName || '');
   const [description, setDescription] = useState(marker.description);
@@ -467,7 +475,19 @@ export const PlantPopup: React.FC<PlantPopupProps> = ({ marker, onSave, onDelete
               </div>
 
               <div className="pt-2 flex justify-between items-center">
-                <button onClick={() => onDelete(marker.id)} className="p-2 bg-red-50 text-red-500 rounded-lg hover:bg-red-100 transition-colors"><Trash2 size={18} /></button>
+                <div className="flex gap-2">
+                  <button onClick={() => onDelete(marker.id)} className="p-2 bg-red-50 text-red-500 rounded-lg hover:bg-red-100 transition-colors" title="Delete Marker"><Trash2 size={18} /></button>
+                  {onStartReposition && (
+                    <button 
+                      onClick={onStartReposition} 
+                      className="p-2 bg-amber-500/10 text-amber-600 rounded-lg hover:bg-amber-500/20 transition-colors flex items-center gap-1.5 px-3 text-xs font-bold uppercase"
+                      title="Move Icon Position"
+                    >
+                      <Navigation size={14} className="rotate-45" />
+                      Move
+                    </button>
+                  )}
+                </div>
                 <div className="flex items-center gap-3 text-[10px] font-bold uppercase">
                   {isSaving && <span className="text-emerald-500 animate-pulse">Saving...</span>}
                   <button onClick={onClose} className="px-5 py-2.5 bg-emerald-500 text-white rounded-xl shadow-lg shadow-emerald-500/20 hover:bg-emerald-600 transition-all active:scale-95">Done</button>

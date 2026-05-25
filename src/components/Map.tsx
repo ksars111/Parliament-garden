@@ -46,6 +46,7 @@ interface MapComponentProps {
   onAnimationComplete?: () => void;
   onMapLoad?: (loaded: boolean) => void;
   isDataLoading?: boolean;
+  repositioningMarkerId?: string | null;
 }
 
 const TREE_ICON = `<svg viewBox="0 0 24 24" width="24" height="24" fill="#86efac" xmlns="http://www.w3.org/2000/svg"><path d="M19.2,11.5c0-2.2-1.8-4-4-4c-0.1,0-0.2,0-0.3,0c-0.6-1.5-2.1-2.6-3.8-2.6c-2.3,0-4.2,1.9-4.2,4.2c0,0.1,0,0.2,0,0.3c-0.9,0.5-1.5,1.5-1.5,2.6c0,1.7,1.4,3.1,3.1,3.1h0.2l-1,4.9h8l-1-4.9h0.4c1.7,0,3.1-1.4,3.1-3.1Z M12,15l-1.5-3h3L12,15Z M10,12l-1-1.5h1L10,12Z M14,12l1-1.5h-1L14,12Z"/></svg>`;
@@ -69,7 +70,8 @@ const MapComponent: React.FC<MapComponentProps> = ({
   canEdit = false,
   onAnimationComplete,
   onMapLoad,
-  isDataLoading = false
+  isDataLoading = false,
+  repositioningMarkerId = null
 }) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const [isMapLoaded, setIsMapLoaded] = useState(false);
@@ -310,7 +312,8 @@ const MapComponent: React.FC<MapComponentProps> = ({
 
       if (existingMarker) {
         existingMarker.setLngLat([marker.longitude, marker.latitude]);
-        existingMarker.setDraggable(canEdit);
+        const isCurrentlyDraggable = !!canEdit && repositioningMarkerId === marker.id;
+        existingMarker.setDraggable(isCurrentlyDraggable);
         
         // Visual style updates...
         const el = existingMarker.getElement();
@@ -347,9 +350,10 @@ const MapComponent: React.FC<MapComponentProps> = ({
         label.textContent = marker.name;
         el.appendChild(label);
 
+        const isCurrentlyDraggable = !!canEdit && repositioningMarkerId === marker.id;
         const newMarker = new maplibregl.Marker({
           element: el,
-          draggable: canEdit
+          draggable: isCurrentlyDraggable
         })
           .setLngLat([marker.longitude, marker.latitude])
           .addTo(map);
@@ -398,7 +402,7 @@ const MapComponent: React.FC<MapComponentProps> = ({
       map.fitBounds(bounds, { padding: 100, maxZoom: 17, animate: false });
       hasInitialFit.current = true;
     }
-  }, [isMapLoaded, markers, canEdit, onMarkerClick, onUpdatePosition]);
+  }, [isMapLoaded, markers, canEdit, onMarkerClick, onUpdatePosition, repositioningMarkerId]);
 
   const isLoading = !isMapLoaded || isDataLoading;
 
@@ -462,6 +466,8 @@ export const GardenMap: React.FC = () => {
   const [isDataLoading, setIsDataLoading] = useState(true);
   const [isQuotaExceeded, setIsQuotaExceeded] = useState(false);
   const [isWriteQuotaExceeded, setIsWriteQuotaExceeded] = useState(false);
+  const [repositioningMarkerId, setRepositioningMarkerId] = useState<string | null>(null);
+  const [repositioningOriginalPos, setRepositioningOriginalPos] = useState<{ longitude: number; latitude: number } | null>(null);
   const mapRef = useRef<maplibregl.Map | null>(null);
   const legendRef = useRef<HTMLDivElement>(null);
 
@@ -817,6 +823,31 @@ export const GardenMap: React.FC = () => {
     }
   }, [canEdit, markers]);
 
+  const handleCancelReposition = useCallback(async () => {
+    if (!repositioningMarkerId || !repositioningOriginalPos) return;
+    const marker = markers.find(m => m.id === repositioningMarkerId);
+    if (marker) {
+      await updatePosition({
+        ...marker,
+        longitude: repositioningOriginalPos.longitude,
+        latitude: repositioningOriginalPos.latitude
+      }, true);
+    }
+    setRepositioningMarkerId(null);
+    setRepositioningOriginalPos(null);
+  }, [repositioningMarkerId, repositioningOriginalPos, markers, updatePosition]);
+
+  const handleSaveReposition = useCallback(() => {
+    setRepositioningMarkerId(null);
+    setRepositioningOriginalPos(null);
+  }, []);
+
+  const startReposition = useCallback((marker: PlantMarker) => {
+    setRepositioningMarkerId(marker.id);
+    setRepositioningOriginalPos({ longitude: marker.longitude, latitude: marker.latitude });
+    setSelectedMarker(null);
+  }, []);
+
   const undoLastMove = useCallback(async () => {
     if (!lastMove || !canEdit || !auth.currentUser) return;
     
@@ -971,6 +1002,7 @@ export const GardenMap: React.FC = () => {
         canEdit={canEdit}
         isDataLoading={isDataLoading}
         onMapLoad={setIsMapReady}
+        repositioningMarkerId={repositioningMarkerId}
         onAnimationComplete={() => {
           if (!localStorage.getItem('welcome_shown')) {
             setShowWelcome(true);
@@ -1639,9 +1671,50 @@ export const GardenMap: React.FC = () => {
                 onDelete={deleteMarker}
                 onClose={() => setSelectedMarker(null)}
                 canEdit={canEdit}
+                onStartReposition={() => startReposition(selectedMarker)}
               />
             </div>
           </div>
+        )}
+      </AnimatePresence>
+
+      {/* Reposition Banner Overlay */}
+      <AnimatePresence>
+        {repositioningMarkerId && (
+          <motion.div
+            initial={{ opacity: 0, y: 50 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: 50 }}
+            className="absolute bottom-6 left-1/2 -translate-x-1/2 z-[8000] w-[90%] max-w-md pointer-events-auto"
+          >
+            <div className="bg-zinc-950/90 border border-amber-500/30 backdrop-blur-md text-white p-4 rounded-2xl shadow-2xl flex flex-col gap-3">
+              <div className="flex items-start gap-3">
+                <div className="bg-amber-500/10 p-2 rounded-xl text-amber-400 shrink-0">
+                  <Navigation className="animate-pulse" size={18} />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <h4 className="text-xs font-bold text-amber-400 uppercase tracking-wider">Repositioning Icon</h4>
+                  <p className="text-[11px] text-gray-400 leading-normal mt-0.5">
+                    Drag the icon on the map to relocate it. Zooming and panning other parts of the map is completely safe now.
+                  </p>
+                </div>
+              </div>
+              <div className="flex gap-2">
+                <button 
+                  onClick={handleCancelReposition}
+                  className="flex-1 py-2 px-3 bg-white/5 hover:bg-white/10 active:scale-95 border border-white/5 rounded-xl font-bold text-[10px] tracking-wider uppercase text-gray-300 hover:text-white transition-all cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button 
+                  onClick={handleSaveReposition}
+                  className="flex-1 py-2 px-3 bg-amber-500 hover:bg-amber-600 active:scale-95 text-zinc-950 rounded-xl font-extrabold text-[10px] tracking-wider uppercase transition-all shadow-lg shadow-amber-500/20 cursor-pointer"
+                >
+                  Save New Position
+                </button>
+              </div>
+            </div>
+          </motion.div>
         )}
       </AnimatePresence>
     </div>
