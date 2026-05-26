@@ -462,11 +462,13 @@ const MapComponent: React.FC<MapComponentProps> = ({
             // Zoom and center over it
             const currentPitch = map.getPitch();
             const pitch = currentPitch < 10 ? 0 : 45;
+            const isMobile = window.innerWidth < 640;
             map.flyTo({
               center: [latestMarker.longitude, latestMarker.latitude],
               zoom: 21,
               pitch: pitch,
-              essential: true
+              essential: true,
+              offset: isMobile ? [0, -100] : [0, 0]
             });
           }
         });
@@ -1076,11 +1078,13 @@ export const GardenMap: React.FC = () => {
     if (!mapRef.current) return;
     const currentPitch = mapRef.current.getPitch();
     const pitch = currentPitch < 10 ? 0 : 45;
+    const isMobile = window.innerWidth < 640;
     mapRef.current.flyTo({
       center: [marker.longitude, marker.latitude],
       zoom: 21,
       pitch,
-      essential: true
+      essential: true,
+      offset: isMobile ? [0, -100] : [0, 0]
     });
     setShowLegend(false);
   };
