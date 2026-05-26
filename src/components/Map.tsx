@@ -59,6 +59,80 @@ const getIcon = (type: string) => {
   return LINK_ICON;
 };
 
+const generateVignetteGeoJSON = (centerLng: number, centerLat: number) => {
+  const ringsCount = 18;
+  const rStart = 0.14; // start fading at 140 meters (the main parliament gardens area is preserved fully lit)
+  const rEnd = 0.38; // reach near-maximum darkness at 380 meters
+  const maxOpacity = 0.85; // maximum darkness scale
+
+  const features: any[] = [];
+
+  const createCircleCoords = (radiusKm: number, points = 64) => {
+    const coords = [];
+    for (let i = 0; i <= points; i++) {
+      const angle = (i * 360) / points;
+      const angleRad = (angle * Math.PI) / 180;
+      const kmPerDegreeLat = 111.32;
+      const kmPerDegreeLng = 40075 * Math.cos((centerLat * Math.PI) / 180) / 360;
+
+      const latOffset = (radiusKm * Math.sin(angleRad)) / kmPerDegreeLat;
+      const lngOffset = (radiusKm * Math.cos(angleRad)) / kmPerDegreeLng;
+      coords.push([centerLng + lngOffset, centerLat + latOffset]);
+    }
+    return coords;
+  };
+
+  // 1. Solid outer area beyond rEnd to mask the external environment out to max bounds
+  const outerBox = [
+    [centerLng - 0.05, centerLat - 0.05],
+    [centerLng + 0.05, centerLat - 0.05],
+    [centerLng + 0.05, centerLat + 0.05],
+    [centerLng - 0.05, centerLat + 0.05],
+    [centerLng - 0.05, centerLat - 0.05]
+  ];
+  const rEndCoords = createCircleCoords(rEnd);
+
+  features.push({
+    type: 'Feature',
+    properties: {
+      opacity: maxOpacity
+    },
+    geometry: {
+      type: 'Polygon',
+      coordinates: [outerBox, rEndCoords]
+    }
+  });
+
+  // 2. Concentric gradient rings between rStart and rEnd to create a smooth feathering transition
+  for (let i = 0; i < ringsCount; i++) {
+    const rInner = rStart + (i / ringsCount) * (rEnd - rStart);
+    const rOuter = rStart + ((i + 1) / ringsCount) * (rEnd - rStart);
+
+    // Quadratic curve for soft gradient drop-off
+    const t = (i + 1) / ringsCount;
+    const opacity = t * t * maxOpacity;
+
+    const innerCircle = createCircleCoords(rInner);
+    const outerCircle = createCircleCoords(rOuter);
+
+    features.push({
+      type: 'Feature',
+      properties: {
+        opacity: opacity
+      },
+      geometry: {
+        type: 'Polygon',
+        coordinates: [outerCircle, innerCircle]
+      }
+    });
+  }
+
+  return {
+    type: 'FeatureCollection' as const,
+    features
+  };
+};
+
 const MapComponent: React.FC<MapComponentProps> = ({ 
   markers, 
   onMarkerClick, 
@@ -228,6 +302,10 @@ const MapComponent: React.FC<MapComponentProps> = ({
             ],
             tileSize: 256,
             attribution: '&copy; Google'
+          },
+          'vignette-source': {
+            type: 'geojson',
+            data: generateVignetteGeoJSON(INITIAL_CENTER[0], INITIAL_CENTER[1])
           }
         },
         layers: [
@@ -237,6 +315,15 @@ const MapComponent: React.FC<MapComponentProps> = ({
             source: 'google-satellite',
             minzoom: 0,
             maxzoom: 24
+          },
+          {
+            id: 'vignette-layer',
+            type: 'fill',
+            source: 'vignette-source',
+            paint: {
+              'fill-color': '#030712', // Warm midnight tailwind zinc-950 slate tone to match dark UI
+              'fill-opacity': ['get', 'opacity']
+            }
           }
         ]
       },
