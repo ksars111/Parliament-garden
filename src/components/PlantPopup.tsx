@@ -284,7 +284,7 @@ export const PlantPopup: React.FC<PlantPopupProps> = ({
 
             {/* Specimen details */}
             <div 
-              className="flex-1 min-w-0 cursor-pointer" 
+              className="flex-1 min-w-0 cursor-pointer text-center flex flex-col items-center justify-center" 
               onClick={(e) => {
                 if (canEdit) {
                   setIsExpanded(true);
@@ -293,8 +293,8 @@ export const PlantPopup: React.FC<PlantPopupProps> = ({
                 }
               }}
             >
-              <div className="flex flex-wrap items-center gap-x-2 gap-y-1 mb-1.5">
-                <h3 className="font-extrabold text-sm md:text-base text-zinc-900 leading-snug line-clamp-2 break-words">{name || 'Unnamed Specimen'}</h3>
+              <div className="flex flex-wrap items-center justify-center gap-x-2 gap-y-1 mb-1.5">
+                <h3 className="font-extrabold text-base md:text-lg text-zinc-900 leading-snug line-clamp-2 break-words">{name || 'Unnamed Specimen'}</h3>
                 <span className={`text-[9px] font-extrabold uppercase tracking-widest px-1.5 py-0.5 rounded-md ${
                   type === 'tree' ? 'bg-green-100 text-green-700' : 
                   type === 'plant' ? 'bg-pink-100/55 text-pink-600' : 
@@ -302,9 +302,9 @@ export const PlantPopup: React.FC<PlantPopupProps> = ({
                 }`}>{type}</span>
               </div>
               {botanicalName ? (
-                <p className="text-xs italic text-zinc-500 line-clamp-1 font-semibold leading-normal">{botanicalName}</p>
+                <p className="text-xs md:text-sm italic text-zinc-600 line-clamp-1 font-semibold leading-normal">{botanicalName}</p>
               ) : (
-                <p className="text-xs text-zinc-400 line-clamp-1 leading-normal">No botanical name specified</p>
+                <p className="text-xs md:text-sm text-zinc-400 line-clamp-1 leading-normal">No botanical name specified</p>
               )}
             </div>
 
