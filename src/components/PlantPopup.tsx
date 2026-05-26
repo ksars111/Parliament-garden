@@ -693,7 +693,14 @@ export const PlantPopup: React.FC<PlantPopupProps> = ({
               onClick={(e) => e.stopPropagation()}
             >
               <div 
-                className={`${isPhotoFocus ? 'md:w-full' : 'md:w-1/2'} h-[60vh] md:h-auto md:min-h-[600px] bg-gray-900 relative flex flex-col touch-none transition-all duration-500`}
+                className={`${isPhotoFocus ? 'md:w-full' : 'md:w-1/2'} h-[60vh] md:h-auto md:min-h-[600px] bg-gray-900 relative flex flex-col touch-none transition-all duration-500 ${!isPhotoFocus ? 'cursor-pointer hover:bg-gray-800' : ''}`}
+                onClick={(e) => {
+                  if (!isPhotoFocus) {
+                    setIsPhotoFocus(true);
+                    setZoomScale(1);
+                    setZoomPosition({ x: 0, y: 0 });
+                  }
+                }}
                 onWheel={handleWheel}
                 onTouchStart={handleTouchStart}
                 onTouchMove={handleTouchMove}
@@ -743,7 +750,7 @@ export const PlantPopup: React.FC<PlantPopupProps> = ({
                   {zoomScale > 1 && (
                     <div className="absolute top-6 left-1/2 -translate-x-1/2 flex gap-2 z-10">
                       <button
-                        onClick={() => { setZoomScale(1); setZoomPosition({ x: 0, y: 0 }); }}
+                        onClick={(e) => { e.stopPropagation(); setZoomScale(1); setZoomPosition({ x: 0, y: 0 }); }}
                         className="p-2 bg-white/20 hover:bg-white/30 backdrop-blur-md rounded-full text-white flex items-center gap-2 text-[10px] font-bold uppercase tracking-wide px-4 h-10 border border-white/10 shadow-xl"
                       >
                         <RotateCcw size={14} /> Reset Zoom
@@ -753,7 +760,8 @@ export const PlantPopup: React.FC<PlantPopupProps> = ({
 
                   {isPhotoFocus && (
                     <button
-                      onClick={() => {
+                      onClick={(e) => {
+                        e.stopPropagation();
                         setIsPhotoFocus(false);
                         setZoomScale(1);
                         setZoomPosition({ x: 0, y: 0 });
@@ -766,8 +774,8 @@ export const PlantPopup: React.FC<PlantPopupProps> = ({
 
                   {allImages.length > 1 && (
                     <>
-                      <button onClick={prevImage} className="absolute left-4 top-1/2 -translate-y-1/2 p-3 bg-black/40 hover:bg-black/60 backdrop-blur-md rounded-full text-white transition-all hover:scale-110"><ChevronLeft size={24} /></button>
-                      <button onClick={nextImage} className="absolute right-4 top-1/2 -translate-y-1/2 p-3 bg-black/40 hover:bg-black/60 backdrop-blur-md rounded-full text-white transition-all hover:scale-110"><ChevronRight size={24} /></button>
+                      <button onClick={(e) => { e.stopPropagation(); prevImage(); }} className="absolute left-4 top-1/2 -translate-y-1/2 p-3 bg-black/40 hover:bg-black/60 backdrop-blur-md rounded-full text-white transition-all hover:scale-110"><ChevronLeft size={24} /></button>
+                      <button onClick={(e) => { e.stopPropagation(); nextImage(); }} className="absolute right-4 top-1/2 -translate-y-1/2 p-3 bg-black/40 hover:bg-black/60 backdrop-blur-md rounded-full text-white transition-all hover:scale-110"><ChevronRight size={24} /></button>
                     </>
                   )}
                 </div>
@@ -775,7 +783,7 @@ export const PlantPopup: React.FC<PlantPopupProps> = ({
                 {allImages.length > 1 && (
                   <div className="h-24 bg-black/20 backdrop-blur-md p-4 flex gap-3 overflow-x-auto custom-scrollbar shrink-0">
                     {allImages.map((img, idx) => (
-                      <button key={idx} onClick={() => setCurrentImageIndex(idx)} className={`relative shrink-0 w-16 h-16 rounded-xl overflow-hidden border-2 transition-all ${idx === currentImageIndex ? 'border-emerald-500 scale-105 shadow-lg shadow-emerald-500/20' : 'border-transparent opacity-50 hover:opacity-100'}`}>
+                      <button key={idx} onClick={(e) => { e.stopPropagation(); setCurrentImageIndex(idx); }} className={`relative shrink-0 w-16 h-16 rounded-xl overflow-hidden border-2 transition-all ${idx === currentImageIndex ? 'border-emerald-500 scale-105 shadow-lg shadow-emerald-500/20' : 'border-transparent opacity-50 hover:opacity-100'}`}>
                         <img src={img.url} alt="" className="w-full h-full object-cover" />
                       </button>
                     ))}
@@ -783,7 +791,7 @@ export const PlantPopup: React.FC<PlantPopupProps> = ({
                 )}
 
                 <button 
-                  onClick={() => setIsModalOpen(false)} 
+                  onClick={(e) => { e.stopPropagation(); setIsModalOpen(false); }} 
                   className={`absolute top-4 right-4 md:top-6 md:right-6 p-2 bg-black/50 hover:bg-black/75 backdrop-blur-md rounded-full text-white transition-all hover:scale-110 active:scale-95 z-40 flex items-center justify-center shadow-lg ${isPhotoFocus ? 'block' : 'block md:hidden'}`}
                   title="Close Picture View"
                 >
