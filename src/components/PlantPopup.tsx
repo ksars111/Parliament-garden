@@ -260,75 +260,88 @@ export const PlantPopup: React.FC<PlantPopupProps> = ({
             initial={{ opacity: 0, scale: 0.95, y: 15 }}
             animate={{ opacity: 1, scale: 1, y: 0 }}
             exit={{ opacity: 0, scale: 0.95, y: 15 }}
-            className="bg-white/95 border border-zinc-200/80 backdrop-blur-md text-zinc-900 shadow-[0_20px_40px_-15px_rgba(0,0,0,0.2)] p-5 md:p-6 rounded-3xl flex items-center justify-between gap-4 w-full h-auto pointer-events-auto select-none"
+            className="bg-white/95 border border-zinc-200/80 backdrop-blur-md text-zinc-900 shadow-[0_20px_40px_-15px_rgba(0,0,0,0.2)] p-4 sm:p-5 md:p-6 rounded-3xl flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 sm:gap-4 w-full h-auto pointer-events-auto select-none"
           >
-            {/* Small photo on the side */}
-            <div 
-              onClick={openPhotoFocus}
-              className="w-18 h-18 md:w-20 md:h-20 rounded-2xl overflow-hidden cursor-pointer border border-zinc-200/50 flex-shrink-0 bg-neutral-900 relative group/thumb shadow-sm"
-              title="Open Image View"
-            >
-              {allImages.length > 0 ? (
-                <img 
-                  src={allImages[0].url} 
-                  alt={name} 
-                  className="w-full h-full object-cover group-hover/thumb:scale-110 transition-transform duration-300" 
-                  referrerPolicy="no-referrer"
-                />
-              ) : (
-                <div className="w-full h-full flex items-center justify-center text-zinc-400 bg-zinc-50">
-                  <Camera size={22} className="opacity-60" />
-                </div>
-              )}
-            </div>
-
-            {/* Specimen details */}
-            <div 
-              className="flex-1 min-w-0 cursor-pointer text-center flex flex-col items-center justify-center" 
-              onClick={(e) => {
-                if (canEdit) {
-                  setIsExpanded(true);
-                } else {
-                  openFullModal(e);
-                }
-              }}
-            >
-              <div className="flex flex-wrap items-center justify-center gap-x-2 gap-y-1 mb-1.5">
-                <h3 className="font-extrabold text-base md:text-lg text-zinc-900 leading-snug line-clamp-2 break-words">{name || 'Unnamed Specimen'}</h3>
-                <span className={`text-[9px] font-extrabold uppercase tracking-widest px-1.5 py-0.5 rounded-md ${
-                  type === 'tree' ? 'bg-green-100 text-green-700' : 
-                  type === 'plant' ? 'bg-pink-100/55 text-pink-600' : 
-                  'bg-blue-100 text-blue-700'
-                }`}>{type}</span>
+            {/* Top Row on Mobile: Image + Central Information + Close Button */}
+            <div className="flex items-center gap-3 sm:gap-4 flex-1 min-w-0 w-full">
+              {/* Small photo on the side */}
+              <div 
+                onClick={openPhotoFocus}
+                className="w-14 h-14 sm:w-18 sm:h-18 md:w-20 md:h-20 rounded-2xl overflow-hidden cursor-pointer border border-zinc-200/50 flex-shrink-0 bg-neutral-900 relative group/thumb shadow-sm"
+                title="Open Image View"
+              >
+                {allImages.length > 0 ? (
+                  <img 
+                    src={allImages[0].url} 
+                    alt={name} 
+                    className="w-full h-full object-cover group-hover/thumb:scale-110 transition-transform duration-300" 
+                    referrerPolicy="no-referrer"
+                  />
+                ) : (
+                  <div className="w-full h-full flex items-center justify-center text-zinc-400 bg-zinc-550 bg-zinc-50">
+                    <Camera size={20} className="opacity-60" />
+                  </div>
+                )}
               </div>
-              {botanicalName ? (
-                <p className="text-xs md:text-sm italic text-zinc-600 line-clamp-1 font-semibold leading-normal">{botanicalName}</p>
-              ) : (
-                <p className="text-xs md:text-sm text-zinc-400 line-clamp-1 leading-normal">No botanical name specified</p>
-              )}
+
+              {/* Specimen details */}
+              <div 
+                className="flex-1 min-w-0 cursor-pointer text-left sm:text-center flex flex-col sm:items-center justify-center" 
+                onClick={(e) => {
+                  if (canEdit) {
+                    setIsExpanded(true);
+                  } else {
+                    openFullModal(e);
+                  }
+                }}
+              >
+                <div className="flex flex-wrap items-center sm:justify-center gap-x-2 gap-y-1 mb-1">
+                  <h3 className="font-extrabold text-sm sm:text-base md:text-lg text-zinc-900 leading-snug line-clamp-2 break-words">{name || 'Unnamed Specimen'}</h3>
+                  <span className={`text-[9px] font-extrabold uppercase tracking-widest px-1.5 py-0.5 rounded-md ${
+                    type === 'tree' ? 'bg-green-100 text-green-700' : 
+                    type === 'plant' ? 'bg-pink-100/55 text-pink-600' : 
+                    'bg-blue-100 text-blue-700'
+                  }`}>{type}</span>
+                </div>
+                {botanicalName ? (
+                  <p className="text-xs md:text-sm italic text-zinc-600 line-clamp-1 font-semibold leading-normal">{botanicalName}</p>
+                ) : (
+                  <p className="text-xs md:text-sm text-zinc-400 line-clamp-1 leading-normal">No botanical name specified</p>
+                )}
+              </div>
+
+              {/* Close button - visible only on Mobile next to details */}
+              <button 
+                onClick={onClose} 
+                className="sm:hidden p-1.5 text-zinc-400 hover:text-zinc-600 hover:bg-zinc-100 rounded-lg transition-all active:scale-90 flex-shrink-0 align-self-start"
+                title="Close Popup"
+              >
+                <X size={18} />
+              </button>
             </div>
 
-            {/* Buttons */}
-            <div className="flex items-center gap-2.5 shrink-0">
+            {/* Bottom Row on Mobile, Right side on Desktop: Buttons */}
+            <div className="flex items-center gap-2 sm:gap-2.5 shrink-0 w-full sm:w-auto mt-1 sm:mt-0">
               {canEdit ? (
                 <button
                   onClick={() => setIsExpanded(true)}
-                  className="px-4 py-2 bg-zinc-100 hover:bg-zinc-200 text-zinc-800 rounded-xl font-bold text-xs uppercase tracking-wider transition-all cursor-pointer active:scale-95 shadow-sm"
+                  className="flex-1 sm:flex-none text-center px-4 py-2.5 sm:py-2 bg-zinc-100 hover:bg-zinc-200 text-zinc-800 rounded-xl font-bold text-xs uppercase tracking-wider transition-all cursor-pointer active:scale-95 shadow-sm"
                 >
                   Edit
                 </button>
               ) : (
                 <button
                   onClick={openFullModal}
-                  className="px-4 py-2 bg-emerald-500 hover:bg-emerald-600 text-white rounded-xl font-bold text-xs uppercase tracking-wider transition-all cursor-pointer active:scale-95 shadow-lg shadow-emerald-500/20"
+                  className="flex-1 sm:flex-none text-center px-4 py-2.5 sm:py-2 bg-emerald-500 hover:bg-emerald-600 text-white rounded-xl font-bold text-xs uppercase tracking-wider transition-all cursor-pointer active:scale-95 shadow-lg shadow-emerald-500/20"
                 >
                   Learn More
                 </button>
               )}
               
+              {/* Close button - visible only on Desktop */}
               <button 
                 onClick={onClose} 
-                className="p-2 text-zinc-400 hover:text-zinc-600 hover:bg-zinc-105 hover:bg-zinc-100 rounded-xl transition-all active:scale-90"
+                className="hidden sm:block p-2 text-zinc-400 hover:text-zinc-600 hover:bg-zinc-100 rounded-xl transition-all active:scale-90"
                 title="Close Popup"
               >
                 <X size={18} />
