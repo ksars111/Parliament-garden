@@ -1748,8 +1748,8 @@ export const GardenMap: React.FC = () => {
       {/* Popup Overlay */}
       <AnimatePresence mode="wait">
         {selectedMarker && (
-          <div className="absolute inset-y-0 right-0 z-[5000] pointer-events-none flex items-center justify-end p-6 md:p-12">
-            <div className="pointer-events-auto">
+          <div className="absolute bottom-6 left-1/2 -translate-x-1/2 z-[5000] pointer-events-none w-[92%] max-w-xl flex flex-col justify-end">
+            <div className="pointer-events-auto w-full">
               <PlantPopup
                 key={selectedMarker.id}
                 marker={selectedMarker}
