@@ -332,6 +332,7 @@ const MapComponent: React.FC<MapComponentProps> = ({
       maxZoom: 24,
       maxBounds: MAX_BOUNDS,
       pitch: 45, // Slight tilt like Felt
+      bearing: 0,
       maxPitch: 85,
       attributionControl: false,
     });
@@ -482,11 +483,8 @@ const MapComponent: React.FC<MapComponentProps> = ({
     // Update z-indices after sync
     updateMarkerZIndices();
 
-    // Initial fit bounds when markers are first loaded
+    // Keep the initial zoom and orientation (pitch and bearing) matching the Home reset view
     if (!hasInitialFit.current && markers.length > 0) {
-      const bounds = new maplibregl.LngLatBounds();
-      markers.forEach(m => bounds.extend([m.longitude, m.latitude]));
-      map.fitBounds(bounds, { padding: 100, maxZoom: 17, animate: false });
       hasInitialFit.current = true;
     }
   }, [isMapLoaded, markers, canEdit, onMarkerClick, onUpdatePosition, repositioningMarkerId]);
