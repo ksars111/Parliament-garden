@@ -260,33 +260,42 @@ export const PlantPopup: React.FC<PlantPopupProps> = ({
             initial={{ opacity: 0, scale: 0.95, y: 15 }}
             animate={{ opacity: 1, scale: 1, y: 0 }}
             exit={{ opacity: 0, scale: 0.95, y: 15 }}
-            className="bg-white/95 border border-zinc-200/80 backdrop-blur-md text-zinc-900 shadow-[0_20px_40px_-15px_rgba(0,0,0,0.2)] p-4 sm:p-5 md:p-6 rounded-3xl flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 sm:gap-4 w-full h-auto pointer-events-auto select-none"
+            className="relative bg-white/95 border border-zinc-200/80 backdrop-blur-md text-zinc-900 shadow-[0_20px_40px_-15px_rgba(0,0,0,0.2)] p-4 sm:p-5 md:p-6 rounded-3xl flex flex-row items-center gap-4 w-full h-[28vh] min-h-[185px] max-h-[220px] sm:h-auto sm:min-h-0 sm:max-h-none pointer-events-auto select-none"
           >
-            {/* Top Row on Mobile: Image + Central Information + Close Button */}
-            <div className="flex items-center gap-3 sm:gap-4 flex-1 min-w-0 w-full">
-              {/* Small photo on the side */}
-              <div 
-                onClick={openPhotoFocus}
-                className="w-14 h-14 sm:w-18 sm:h-18 md:w-20 md:h-20 rounded-2xl overflow-hidden cursor-pointer border border-zinc-200/50 flex-shrink-0 bg-neutral-900 relative group/thumb shadow-sm"
-                title="Open Image View"
-              >
-                {allImages.length > 0 ? (
-                  <img 
-                    src={allImages[0].url} 
-                    alt={name} 
-                    className="w-full h-full object-cover group-hover/thumb:scale-110 transition-transform duration-300" 
-                    referrerPolicy="no-referrer"
-                  />
-                ) : (
-                  <div className="w-full h-full flex items-center justify-center text-zinc-400 bg-zinc-550 bg-zinc-50">
-                    <Camera size={20} className="opacity-60" />
-                  </div>
-                )}
-              </div>
+            {/* Absolute close button on Mobile to keep layout clean */}
+            <button 
+              onClick={onClose} 
+              className="absolute top-3 right-3 sm:hidden p-1.5 text-zinc-400 hover:text-zinc-600 hover:bg-zinc-100 rounded-lg transition-all active:scale-95 z-30"
+              title="Close Popup"
+            >
+              <X size={18} />
+            </button>
 
+            {/* Prominent Photo/Thumbnail */}
+            <div 
+              onClick={openPhotoFocus}
+              className="w-[35%] h-full sm:w-18 sm:h-18 md:w-20 md:h-20 rounded-2xl overflow-hidden cursor-pointer border border-zinc-200/50 flex-shrink-0 bg-neutral-900 relative group/thumb shadow-sm"
+              title="Open Image View"
+            >
+              {allImages.length > 0 ? (
+                <img 
+                  src={allImages[0].url} 
+                  alt={name} 
+                  className="w-full h-full object-cover group-hover/thumb:scale-110 transition-transform duration-300" 
+                  referrerPolicy="no-referrer"
+                />
+              ) : (
+                <div className="w-full h-full flex items-center justify-center text-zinc-400 bg-zinc-50">
+                  <Camera size={22} className="opacity-60" />
+                </div>
+              )}
+            </div>
+
+            {/* Right column container: Flex-1, column on mobile for vertical alignment, row on desktop */}
+            <div className="flex-1 min-w-0 h-full sm:h-auto flex flex-col sm:flex-row sm:items-center sm:justify-between py-1 sm:py-0 gap-3 sm:gap-4 pr-4 sm:pr-0">
               {/* Specimen details */}
               <div 
-                className="flex-1 min-w-0 cursor-pointer text-left sm:text-center flex flex-col sm:items-center justify-center" 
+                className="flex-1 min-w-0 cursor-pointer text-left sm:text-center flex flex-col sm:items-center justify-start sm:justify-center" 
                 onClick={(e) => {
                   if (canEdit) {
                     setIsExpanded(true);
@@ -310,42 +319,33 @@ export const PlantPopup: React.FC<PlantPopupProps> = ({
                 )}
               </div>
 
-              {/* Close button - visible only on Mobile next to details */}
-              <button 
-                onClick={onClose} 
-                className="sm:hidden p-1.5 text-zinc-400 hover:text-zinc-600 hover:bg-zinc-100 rounded-lg transition-all active:scale-90 flex-shrink-0 align-self-start"
-                title="Close Popup"
-              >
-                <X size={18} />
-              </button>
-            </div>
-
-            {/* Bottom Row on Mobile, Right side on Desktop: Buttons */}
-            <div className="flex items-center gap-2 sm:gap-2.5 shrink-0 w-full sm:w-auto mt-1 sm:mt-0">
-              {canEdit ? (
-                <button
-                  onClick={() => setIsExpanded(true)}
-                  className="flex-1 sm:flex-none text-center px-4 py-2.5 sm:py-2 bg-zinc-100 hover:bg-zinc-200 text-zinc-800 rounded-xl font-bold text-xs uppercase tracking-wider transition-all cursor-pointer active:scale-95 shadow-sm"
+              {/* Action Buttons: Scaled down / smaller on Mobile */}
+              <div className="flex items-center gap-2 sm:gap-2.5 shrink-0">
+                {canEdit ? (
+                  <button
+                    onClick={() => setIsExpanded(true)}
+                    className="text-center px-3 py-1.5 sm:px-4 sm:py-2 bg-zinc-100 hover:bg-zinc-200 text-zinc-800 rounded-lg sm:rounded-xl font-bold text-[11px] sm:text-xs uppercase tracking-wider transition-all cursor-pointer active:scale-95 shadow-sm"
+                  >
+                    Edit
+                  </button>
+                ) : (
+                  <button
+                    onClick={openFullModal}
+                    className="text-center px-3 py-1.5 sm:px-4 sm:py-2 bg-emerald-500 hover:bg-emerald-600 text-white rounded-lg sm:rounded-xl font-bold text-[11px] sm:text-xs uppercase tracking-wider transition-all cursor-pointer active:scale-95 shadow-md sm:shadow-lg shadow-emerald-500/10 sm:shadow-emerald-500/20"
+                  >
+                    Learn More
+                  </button>
+                )}
+                
+                {/* Close button - visible only on Desktop */}
+                <button 
+                  onClick={onClose} 
+                  className="hidden sm:block p-2 text-zinc-400 hover:text-zinc-600 hover:bg-zinc-100 rounded-xl transition-all active:scale-90"
+                  title="Close Popup"
                 >
-                  Edit
+                  <X size={18} />
                 </button>
-              ) : (
-                <button
-                  onClick={openFullModal}
-                  className="flex-1 sm:flex-none text-center px-4 py-2.5 sm:py-2 bg-emerald-500 hover:bg-emerald-600 text-white rounded-xl font-bold text-xs uppercase tracking-wider transition-all cursor-pointer active:scale-95 shadow-lg shadow-emerald-500/20"
-                >
-                  Learn More
-                </button>
-              )}
-              
-              {/* Close button - visible only on Desktop */}
-              <button 
-                onClick={onClose} 
-                className="hidden sm:block p-2 text-zinc-400 hover:text-zinc-600 hover:bg-zinc-100 rounded-xl transition-all active:scale-90"
-                title="Close Popup"
-              >
-                <X size={18} />
-              </button>
+              </div>
             </div>
           </motion.div>
         ) : (
