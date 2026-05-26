@@ -173,7 +173,7 @@ export const PlantPopup: React.FC<PlantPopupProps> = ({
 
   const openPhotoFocus = (e: React.MouseEvent) => {
     e.stopPropagation();
-    setZoomScale(1.5);
+    setZoomScale(1);
     setZoomPosition({ x: 0, y: 0 });
     setIsPhotoFocus(true);
     setIsModalOpen(true);
@@ -259,12 +259,12 @@ export const PlantPopup: React.FC<PlantPopupProps> = ({
             initial={{ opacity: 0, scale: 0.95, y: 15 }}
             animate={{ opacity: 1, scale: 1, y: 0 }}
             exit={{ opacity: 0, scale: 0.95, y: 15 }}
-            className="bg-white/95 border border-zinc-200/80 backdrop-blur-md text-zinc-900 shadow-[0_20px_40px_-15px_rgba(0,0,0,0.2)] p-4 rounded-3xl flex items-center justify-between gap-4 w-full h-auto pointer-events-auto select-none"
+            className="bg-white/95 border border-zinc-200/80 backdrop-blur-md text-zinc-900 shadow-[0_20px_40px_-15px_rgba(0,0,0,0.2)] p-5 md:p-6 rounded-3xl flex items-center justify-between gap-4 w-full h-auto pointer-events-auto select-none"
           >
             {/* Small photo on the side */}
             <div 
               onClick={openPhotoFocus}
-              className="w-16 h-16 rounded-2xl overflow-hidden cursor-pointer border border-zinc-200/50 flex-shrink-0 bg-neutral-900 relative group/thumb shadow-sm"
+              className="w-18 h-18 md:w-20 md:h-20 rounded-2xl overflow-hidden cursor-pointer border border-zinc-200/50 flex-shrink-0 bg-neutral-900 relative group/thumb shadow-sm"
               title="Open Image View"
             >
               {allImages.length > 0 ? (
@@ -275,16 +275,25 @@ export const PlantPopup: React.FC<PlantPopupProps> = ({
                   referrerPolicy="no-referrer"
                 />
               ) : (
-                <div className="w-full h-full flex items-center justify-center text-zinc-400 bg-zinc-550 bg-zinc-50">
+                <div className="w-full h-full flex items-center justify-center text-zinc-400 bg-zinc-50">
                   <Camera size={22} className="opacity-60" />
                 </div>
               )}
             </div>
 
             {/* Specimen details */}
-            <div className="flex-1 min-w-0 cursor-pointer" onClick={() => setIsExpanded(true)}>
-              <div className="flex items-center gap-2 mb-1">
-                <h3 className="font-extrabold text-sm md:text-base text-zinc-900 leading-tight truncate">{name || 'Unnamed Specimen'}</h3>
+            <div 
+              className="flex-1 min-w-0 cursor-pointer" 
+              onClick={(e) => {
+                if (canEdit) {
+                  setIsExpanded(true);
+                } else {
+                  openFullModal(e);
+                }
+              }}
+            >
+              <div className="flex flex-wrap items-center gap-x-2 gap-y-1 mb-1.5">
+                <h3 className="font-extrabold text-sm md:text-base text-zinc-900 leading-snug line-clamp-2 break-words">{name || 'Unnamed Specimen'}</h3>
                 <span className={`text-[9px] font-extrabold uppercase tracking-widest px-1.5 py-0.5 rounded-md ${
                   type === 'tree' ? 'bg-green-100 text-green-700' : 
                   type === 'plant' ? 'bg-pink-100/55 text-pink-600' : 
@@ -292,9 +301,9 @@ export const PlantPopup: React.FC<PlantPopupProps> = ({
                 }`}>{type}</span>
               </div>
               {botanicalName ? (
-                <p className="text-xs italic text-zinc-500 truncate font-semibold leading-normal">{botanicalName}</p>
+                <p className="text-xs italic text-zinc-500 line-clamp-1 font-semibold leading-normal">{botanicalName}</p>
               ) : (
-                <p className="text-xs text-zinc-400 truncate leading-normal">No botanical name specified</p>
+                <p className="text-xs text-zinc-400 line-clamp-1 leading-normal">No botanical name specified</p>
               )}
             </div>
 
@@ -309,7 +318,7 @@ export const PlantPopup: React.FC<PlantPopupProps> = ({
                 </button>
               ) : (
                 <button
-                  onClick={() => setIsExpanded(true)}
+                  onClick={openFullModal}
                   className="px-4 py-2 bg-emerald-500 hover:bg-emerald-600 text-white rounded-xl font-bold text-xs uppercase tracking-wider transition-all cursor-pointer active:scale-95 shadow-lg shadow-emerald-500/20"
                 >
                   Learn More

@@ -458,6 +458,16 @@ const MapComponent: React.FC<MapComponentProps> = ({
             window.open(latestMarker.url, '_blank');
           } else {
             onMarkerClickRef.current(latestMarker);
+            
+            // Zoom and center over it
+            const currentPitch = map.getPitch();
+            const pitch = currentPitch < 10 ? 0 : 45;
+            map.flyTo({
+              center: [latestMarker.longitude, latestMarker.latitude],
+              zoom: 21,
+              pitch: pitch,
+              essential: true
+            });
           }
         });
 
@@ -1064,10 +1074,12 @@ export const GardenMap: React.FC = () => {
 
   const zoomToMarker = (marker: PlantMarker) => {
     if (!mapRef.current) return;
+    const currentPitch = mapRef.current.getPitch();
+    const pitch = currentPitch < 10 ? 0 : 45;
     mapRef.current.flyTo({
       center: [marker.longitude, marker.latitude],
       zoom: 21,
-      pitch: 60,
+      pitch,
       essential: true
     });
     setShowLegend(false);
@@ -1290,7 +1302,10 @@ export const GardenMap: React.FC = () => {
                     {sortedMarkers.map((marker) => (
                       <button
                         key={marker.id}
-                        onClick={() => zoomToMarker(marker)}
+                        onClick={() => {
+                          setSelectedMarker(marker);
+                          zoomToMarker(marker);
+                        }}
                         className="w-full text-left p-3 hover:bg-white/5 rounded-xl transition-colors group flex items-center gap-3"
                       >
                         <div className={`w-3 h-3 flex items-center justify-center shrink-0 ${marker.type === 'tree' ? 'text-green-300' : marker.type === 'plant' ? 'text-pink-400' : 'text-blue-400'} drop-shadow-[0_1px_1px_rgba(0,0,0,0.5)]`}>
