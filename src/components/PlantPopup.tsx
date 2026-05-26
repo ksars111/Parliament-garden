@@ -753,7 +753,11 @@ export const PlantPopup: React.FC<PlantPopupProps> = ({
 
                   {isPhotoFocus && (
                     <button
-                      onClick={() => setIsPhotoFocus(false)}
+                      onClick={() => {
+                        setIsPhotoFocus(false);
+                        setZoomScale(1);
+                        setZoomPosition({ x: 0, y: 0 });
+                      }}
                       className="absolute bottom-8 right-8 p-3 bg-emerald-500 hover:bg-emerald-600 backdrop-blur-md rounded-2xl text-white z-20 flex items-center gap-2 text-sm font-bold shadow-2xl transition-all hover:scale-105 active:scale-95"
                     >
                       <Info size={20} /> Show Details
