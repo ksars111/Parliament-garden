@@ -1,4 +1,5 @@
 import React, { useState, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import { X, Camera, Maximize2, ChevronLeft, ChevronRight, GripVertical, ImageUp, RotateCcw, Info, Trash2, Save, Upload, Tag, Plus as PlusIcon, ExternalLink, Link, Navigation } from 'lucide-react';
 import { PlantMarker, PlantImage } from '../types';
 import { motion, AnimatePresence, Reorder } from 'motion/react';
@@ -335,13 +336,16 @@ export const PlantPopup: React.FC<PlantPopupProps> = ({
             </div>
           </motion.div>
         ) : (
-          <motion.div
-            key="expanded-card"
-            initial={{ opacity: 0, scale: 0.95, y: 15 }}
-            animate={{ opacity: 1, scale: 1, y: 0 }}
-            exit={{ opacity: 0, scale: 0.95, y: 15 }}
-            className="bg-white rounded-3xl shadow-[0_30px_60px_-15px_rgba(0,0,0,0.3),0_0_20px_-10px_rgba(0,0,0,0.1)] overflow-hidden w-full max-h-[80vh] border border-gray-200/50 flex flex-col pointer-events-auto"
-          >
+          typeof document !== 'undefined' ? createPortal(
+            <div className="fixed inset-0 z-[9998] flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm pointer-events-auto animate-in fade-in duration-300" onClick={() => setIsExpanded(false)}>
+              <motion.div
+                key="expanded-card"
+                initial={{ opacity: 0, scale: 0.95, y: 15 }}
+                animate={{ opacity: 1, scale: 1, y: 0 }}
+                exit={{ opacity: 0, scale: 0.95, y: 15 }}
+                className="bg-white rounded-3xl shadow-[0_30px_60px_-15px_rgba(0,0,0,0.3),0_0_20px_-10px_rgba(0,0,0,0.1)] overflow-hidden w-[95vw] sm:w-full sm:max-w-xl max-h-[90vh] border border-gray-200/50 flex flex-col pointer-events-auto"
+                onClick={(e) => e.stopPropagation()}
+              >
             <motion.div 
               layout
               className="relative shrink-0 bg-neutral-950 group overflow-hidden transition-all duration-500 ease-in-out aspect-[4/3] w-full"
@@ -652,18 +656,22 @@ export const PlantPopup: React.FC<PlantPopupProps> = ({
               )}
             </div>
           </motion.div>
+            </div>,
+            document.body
+          ) : null
         )}
       </AnimatePresence>
 
-      <AnimatePresence>
-        {isModalOpen && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            className="fixed inset-0 z-[9999] flex items-center justify-center p-4 md:p-8 bg-black/95 backdrop-blur-md"
-            onClick={() => setIsModalOpen(false)}
-          >
+      {typeof document !== 'undefined' && createPortal(
+        <AnimatePresence>
+          {isModalOpen && (
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="fixed inset-0 z-[9999] flex items-center justify-center p-4 md:p-8 bg-black/95 backdrop-blur-md"
+              onClick={() => setIsModalOpen(false)}
+            >
             <motion.div
               initial={{ scale: 0.9, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}
@@ -757,7 +765,13 @@ export const PlantPopup: React.FC<PlantPopupProps> = ({
                   </div>
                 )}
 
-                <button onClick={() => setIsModalOpen(false)} className="absolute top-4 left-4 p-2 bg-black/40 hover:bg-black/60 backdrop-blur-md rounded-full text-white md:hidden"><X size={24} /></button>
+                <button 
+                  onClick={() => setIsModalOpen(false)} 
+                  className={`absolute top-4 right-4 md:top-6 md:right-6 p-2 bg-black/50 hover:bg-black/75 backdrop-blur-md rounded-full text-white transition-all hover:scale-110 active:scale-95 z-40 flex items-center justify-center shadow-lg ${isPhotoFocus ? 'block' : 'block md:hidden'}`}
+                  title="Close Picture View"
+                >
+                  <X size={20} />
+                </button>
               </div>
               {!isPhotoFocus && (
                 <div className="md:w-1/2 p-10 md:p-14 overflow-y-auto flex flex-col animate-in fade-in slide-in-from-right-8 duration-500">
@@ -781,7 +795,9 @@ export const PlantPopup: React.FC<PlantPopupProps> = ({
             </motion.div>
           </motion.div>
         )}
-      </AnimatePresence>
+      </AnimatePresence>,
+      document.body
+    )}
 
       <input ref={fileInputRef} type="file" accept="image/*" onChange={handleFileChange} className="hidden" />
     </>
