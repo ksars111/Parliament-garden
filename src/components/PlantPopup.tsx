@@ -55,7 +55,7 @@ export const PlantPopup: React.FC<PlantPopupProps> = ({
 
   const allImages = localImages;
 
-  // Sync state when marker changes
+  // Sync state ONLY when a completely different marker (by ID) is selected
   React.useEffect(() => {
     setName(marker.name);
     setBotanicalName(marker.botanicalName || '');
@@ -71,7 +71,7 @@ export const PlantPopup: React.FC<PlantPopupProps> = ({
     setType(marker.type);
     setUrl(marker.url || '');
     setIsExpanded(false);
-  }, [marker]);
+  }, [marker.id]);
 
   // Auto-save effect
   React.useEffect(() => {
@@ -254,7 +254,7 @@ export const PlantPopup: React.FC<PlantPopupProps> = ({
   return (
     <>
       <AnimatePresence mode="wait">
-        {!isExpanded ? (
+        {!isExpanded && (
           <motion.div
             key="collapsed-bar"
             initial={{ opacity: 0, scale: 0.95, y: 15 }}
@@ -273,9 +273,16 @@ export const PlantPopup: React.FC<PlantPopupProps> = ({
 
             {/* Prominent Photo/Thumbnail */}
             <div 
-              onClick={openPhotoFocus}
+              onClick={(e) => {
+                e.stopPropagation();
+                if (canEdit) {
+                  setIsExpanded(true);
+                } else {
+                  openPhotoFocus(e);
+                }
+              }}
               className="w-[35%] h-full sm:w-18 sm:h-18 md:w-20 md:h-20 rounded-2xl overflow-hidden cursor-pointer border border-zinc-200/50 flex-shrink-0 bg-neutral-900 relative group/thumb shadow-sm"
-              title="Open Image View"
+              title={canEdit ? "Edit Specimen Features" : "Open Image View"}
             >
               {allImages.length > 0 ? (
                 <img 
@@ -297,6 +304,7 @@ export const PlantPopup: React.FC<PlantPopupProps> = ({
               <div 
                 className="flex-1 min-w-0 cursor-pointer text-left sm:text-center flex flex-col sm:items-center justify-start sm:justify-center gap-y-1" 
                 onClick={(e) => {
+                  e.stopPropagation();
                   if (canEdit) {
                     setIsExpanded(true);
                   } else {
@@ -323,14 +331,20 @@ export const PlantPopup: React.FC<PlantPopupProps> = ({
               <div className="flex items-center gap-2 sm:gap-2.5 shrink-0">
                 {canEdit ? (
                   <button
-                    onClick={() => setIsExpanded(true)}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setIsExpanded(true);
+                    }}
                     className="text-center px-3 py-1.5 sm:px-4 sm:py-2 bg-zinc-100 hover:bg-zinc-200 text-zinc-800 rounded-lg sm:rounded-xl font-bold text-[11px] sm:text-xs uppercase tracking-wider transition-all cursor-pointer active:scale-95 shadow-sm"
                   >
                     Edit
                   </button>
                 ) : (
                   <button
-                    onClick={openFullModal}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      openFullModal(e);
+                    }}
                     className="text-center px-3 py-1.5 sm:px-4 sm:py-2 bg-emerald-500 hover:bg-emerald-600 text-white rounded-lg sm:rounded-xl font-bold text-[11px] sm:text-xs uppercase tracking-wider transition-all cursor-pointer active:scale-95 shadow-md sm:shadow-lg shadow-emerald-500/10 sm:shadow-emerald-500/20"
                   >
                     Learn More
@@ -339,7 +353,10 @@ export const PlantPopup: React.FC<PlantPopupProps> = ({
                 
                 {/* Close button - visible only on Desktop */}
                 <button 
-                  onClick={onClose} 
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onClose();
+                  }} 
                   className="hidden sm:block p-2 text-zinc-400 hover:text-zinc-600 hover:bg-zinc-100 rounded-xl transition-all active:scale-90"
                   title="Close Popup"
                 >
@@ -348,8 +365,12 @@ export const PlantPopup: React.FC<PlantPopupProps> = ({
               </div>
             </div>
           </motion.div>
-        ) : (
-          typeof document !== 'undefined' ? createPortal(
+        )}
+      </AnimatePresence>
+
+      {typeof document !== 'undefined' && createPortal(
+        <AnimatePresence>
+          {isExpanded && (
             <div className="fixed inset-0 z-[9998] flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm pointer-events-auto animate-in fade-in duration-300" onClick={() => setIsExpanded(false)}>
               <motion.div
                 key="expanded-card"
@@ -361,7 +382,7 @@ export const PlantPopup: React.FC<PlantPopupProps> = ({
               >
             <motion.div 
               layout
-              className="relative shrink-0 bg-neutral-950 group overflow-hidden transition-all duration-500 ease-in-out aspect-[4/3] w-full"
+              className={`relative shrink-0 bg-neutral-950 group overflow-hidden transition-all duration-500 ease-in-out w-full ${canEdit ? 'aspect-[16/6]' : 'aspect-[4/3]'}`}
             >
               {allImages.length > 0 ? (
                 <div className="relative w-full h-full bg-neutral-950">
@@ -473,7 +494,7 @@ export const PlantPopup: React.FC<PlantPopupProps> = ({
                     <div className="w-12 h-12 border-4 border-emerald-500/20 border-t-emerald-500 rounded-full animate-spin" />
                   ) : (
                     <>
-                      <Camera size={48} strokeWidth={1} className="text-gray-300 mb-2" />
+                      <Camera size={canEdit ? 36 : 48} strokeWidth={1} className="text-gray-300 mb-1" />
                       {canEdit && isConfigured && <span className="text-[10px] font-bold uppercase tracking-[0.2em] text-gray-400">Click to upload photo</span>}
                     </>
                   )}
@@ -525,9 +546,34 @@ export const PlantPopup: React.FC<PlantPopupProps> = ({
                       <p className="text-[9px] text-blue-400 italic">This link will open in a new tab when the icon is clicked in view mode.</p>
                     </div>
                   )}
-                  <input value={name} onChange={(e) => setName(e.target.value)} className="w-full font-bold text-lg bg-transparent border-none p-0 focus:ring-0" placeholder="Name" />
-                  <input value={botanicalName} onChange={(e) => setBotanicalName(e.target.value)} className="w-full italic text-sm text-gray-500 bg-transparent border-none p-0 focus:ring-0" placeholder="Botanical Name" />
-                  <textarea value={description} onChange={(e) => setDescription(e.target.value)} rows={3} className="w-full text-sm text-gray-600 bg-gray-50 rounded-xl p-3 border-none focus:ring-emerald-500/20 resize-none" placeholder="Description..." />
+                  <div className="space-y-1">
+                    <label className="text-[10px] font-bold uppercase tracking-wider text-zinc-400">Specimen Name</label>
+                    <input 
+                      value={name} 
+                      onChange={(e) => setName(e.target.value)} 
+                      className="w-full font-bold text-base bg-zinc-50 border border-zinc-200 rounded-xl px-3 py-2 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/10 transition-all outline-none" 
+                      placeholder="Name" 
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <label className="text-[10px] font-bold uppercase tracking-wider text-zinc-400">Botanical Name (Scientific)</label>
+                    <input 
+                      value={botanicalName} 
+                      onChange={(e) => setBotanicalName(e.target.value)} 
+                      className="w-full italic text-xs text-zinc-600 bg-zinc-50 border border-zinc-200 rounded-xl px-3 py-2 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/10 transition-all outline-none" 
+                      placeholder="e.g. Acer palmatum" 
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <label className="text-[10px] font-bold uppercase tracking-wider text-zinc-400">Description</label>
+                    <textarea 
+                      value={description} 
+                      onChange={(e) => setDescription(e.target.value)} 
+                      rows={3} 
+                      className="w-full text-xs text-zinc-600 bg-zinc-50 border border-zinc-200 rounded-xl p-3 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/10 transition-all outline-none resize-none" 
+                      placeholder="Enter description, care instructions, or history..." 
+                    />
+                  </div>
                   
                   <div className="pt-2">
                     <div className="flex items-center justify-between mb-2">
@@ -643,7 +689,7 @@ export const PlantPopup: React.FC<PlantPopupProps> = ({
                     <p className="text-sm text-gray-600 leading-relaxed mb-6">
                       {description ? (
                         description.length > 100 ? (
-                          <>
+                           <>
                             {description.substring(0, 100)}...
                             <button onClick={openFullModal} className="text-emerald-500 font-bold ml-1 hover:underline">show more</button>
                           </>
@@ -669,11 +715,11 @@ export const PlantPopup: React.FC<PlantPopupProps> = ({
               )}
             </div>
           </motion.div>
-            </div>,
-            document.body
-          ) : null
-        )}
-      </AnimatePresence>
+            </div>
+          )}
+        </AnimatePresence>,
+        document.body
+      )}
 
       {typeof document !== 'undefined' && createPortal(
         <AnimatePresence>
