@@ -968,7 +968,8 @@ export const GardenMap: React.FC = () => {
   const toggleSnapView = () => {
     if (!mapRef.current) return;
     const currentPitch = mapRef.current.getPitch();
-    const targetPitch = currentPitch > 10 ? 0 : 80;
+    // Toggle between a top-down view (0 degrees) and an elegant 45-degree angled view
+    const targetPitch = currentPitch > 10 ? 0 : 45;
     mapRef.current.easeTo({
       pitch: targetPitch,
       duration: 800,
