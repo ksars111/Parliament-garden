@@ -260,7 +260,12 @@ export const PlantPopup: React.FC<PlantPopupProps> = ({
             initial={{ opacity: 0, scale: 0.95, y: 15 }}
             animate={{ opacity: 1, scale: 1, y: 0 }}
             exit={{ opacity: 0, scale: 0.95, y: 15 }}
-            className="relative bg-white/95 border border-zinc-200/80 backdrop-blur-md text-zinc-900 shadow-[0_20px_40px_-15px_rgba(0,0,0,0.2)] p-4 sm:p-5 md:p-6 rounded-3xl flex flex-row items-center gap-4 w-full h-[28vh] min-h-[185px] max-h-[220px] sm:h-auto sm:min-h-0 sm:max-h-none pointer-events-auto select-none"
+            className={`relative bg-white/95 border border-zinc-200/80 backdrop-blur-md text-zinc-900 shadow-[0_20px_40px_-15px_rgba(0,0,0,0.2)] p-4 sm:p-5 md:p-6 rounded-3xl flex flex-row items-center gap-4 w-full h-[28vh] min-h-[185px] max-h-[220px] sm:h-auto sm:min-h-0 sm:max-h-none pointer-events-auto select-none transition-colors duration-200 ${!canEdit ? 'cursor-pointer hover:bg-neutral-50/60' : ''}`}
+            onClick={(e) => {
+              if (!canEdit) {
+                openFullModal(e);
+              }
+            }}
           >
             {/* Absolute close button on Mobile to keep layout clean */}
             <button 
@@ -330,24 +335,40 @@ export const PlantPopup: React.FC<PlantPopupProps> = ({
               {/* Action Buttons: Scaled down / smaller on Mobile */}
               <div className="flex items-center gap-2 sm:gap-2.5 shrink-0">
                 {canEdit ? (
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      setIsExpanded(true);
-                    }}
-                    className="text-center px-3 py-1.5 sm:px-4 sm:py-2 bg-zinc-100 hover:bg-zinc-200 text-zinc-800 rounded-lg sm:rounded-xl font-bold text-[11px] sm:text-xs uppercase tracking-wider transition-all cursor-pointer active:scale-95 shadow-sm"
-                  >
-                    Edit
-                  </button>
+                  <>
+                    {onStartReposition && (
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onStartReposition();
+                        }}
+                        className="text-center px-2.5 py-1.5 sm:px-3.5 sm:py-2 bg-amber-50 hover:bg-amber-100 text-amber-700 border border-amber-200/40 rounded-lg sm:rounded-xl font-bold text-[11px] sm:text-xs uppercase tracking-wider transition-all cursor-pointer active:scale-95 shadow-sm flex items-center gap-1 sm:gap-1.5"
+                        title="Move Marker Position"
+                      >
+                        <Navigation size={12} className="rotate-45 sm:w-3.5 sm:h-3.5" />
+                        <span>Move</span>
+                      </button>
+                    )}
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setIsExpanded(true);
+                      }}
+                      className="text-center px-3 py-1.5 sm:px-4 sm:py-2 bg-zinc-100 hover:bg-zinc-200 text-zinc-800 rounded-lg sm:rounded-xl font-bold text-[11px] sm:text-xs uppercase tracking-wider transition-all cursor-pointer active:scale-95 shadow-sm"
+                    >
+                      Edit
+                    </button>
+                  </>
                 ) : (
                   <button
                     onClick={(e) => {
                       e.stopPropagation();
                       openFullModal(e);
                     }}
-                    className="text-center px-3 py-1.5 sm:px-4 sm:py-2 bg-emerald-500 hover:bg-emerald-600 text-white rounded-lg sm:rounded-xl font-bold text-[11px] sm:text-xs uppercase tracking-wider transition-all cursor-pointer active:scale-95 shadow-md sm:shadow-lg shadow-emerald-500/10 sm:shadow-emerald-500/20"
+                    className="p-2 text-zinc-400 hover:text-emerald-600 hover:bg-emerald-50 rounded-xl transition-all active:scale-90"
+                    title="Expand View"
                   >
-                    Learn More
+                    <Maximize2 size={16} className="sm:w-[18px] sm:h-[18px]" />
                   </button>
                 )}
                 

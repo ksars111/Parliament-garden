@@ -1340,14 +1340,14 @@ export const GardenMap: React.FC = () => {
             className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-[4000] pointer-events-none"
           >
             <div className="relative">
-              <div className="w-12 h-12 border-2 border-emerald-500/30 rounded-full flex items-center justify-center">
-                <div className="w-1 h-1 bg-emerald-500 rounded-full" />
+              <div className="w-12 h-12 border-2 border-red-500/30 rounded-full flex items-center justify-center">
+                <div className="w-1 h-1 bg-red-500 rounded-full" />
               </div>
-              <div className="absolute top-0 bottom-0 left-1/2 -translate-x-1/2 w-px h-12 bg-emerald-500/20" />
-              <div className="absolute left-0 right-0 top-1/2 -translate-y-1/2 h-px w-12 bg-emerald-500/20" />
+              <div className="absolute top-0 bottom-0 left-1/2 -translate-x-1/2 w-px h-12 bg-red-500/20" />
+              <div className="absolute left-0 right-0 top-1/2 -translate-y-1/2 h-px w-12 bg-red-500/20" />
             </div>
             <div className="absolute top-[calc(100%+8px)] left-1/2 -translate-x-1/2 whitespace-nowrap">
-              <span className="text-[8px] font-bold text-emerald-500 uppercase tracking-[0.2em] bg-black/40 backdrop-blur-sm px-2 py-0.5 rounded-full border border-emerald-500/20">
+              <span className="text-[8px] font-bold text-red-500 uppercase tracking-[0.2em] bg-black/40 backdrop-blur-sm px-2 py-0.5 rounded-full border border-red-500/20">
                 New Tree Placement
               </span>
             </div>
