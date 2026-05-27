@@ -158,6 +158,7 @@ const MapComponent: React.FC<MapComponentProps> = ({
   // Refs to avoid closure staleness in event listeners
   const canEditRef = useRef(canEdit);
   const onMarkerClickRef = useRef(onMarkerClick);
+  const onClosePopupRef = useRef(onClosePopup);
   const markersRef = useRef(markers);
 
   useEffect(() => {
@@ -167,6 +168,10 @@ const MapComponent: React.FC<MapComponentProps> = ({
   useEffect(() => {
     onMarkerClickRef.current = onMarkerClick;
   }, [onMarkerClick]);
+
+  useEffect(() => {
+    onClosePopupRef.current = onClosePopup;
+  }, [onClosePopup]);
 
   useEffect(() => {
     markersRef.current = markers;
@@ -368,7 +373,14 @@ const MapComponent: React.FC<MapComponentProps> = ({
     map.on('click', (e) => {
       // Close popup when clicking the map
       if (!e.defaultPrevented) {
-        onClosePopup();
+        onClosePopupRef.current();
+      }
+    });
+
+    map.on('dragstart', () => {
+      // Close popup when user drags the map on mobile view (< 768px screen width)
+      if (window.innerWidth < 768) {
+        onClosePopupRef.current();
       }
     });
 
