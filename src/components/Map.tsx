@@ -5,7 +5,6 @@ import { Leaf, Plus, Map as MapIcon, Info, List, Search, X, ChevronRight, Pencil
 import { PlantMarker, Snapshot } from '../types';
 import { PlantPopup } from './PlantPopup';
 import { motion, AnimatePresence } from 'motion/react';
-import loadingLeaf from '../assets/images/loading_leaf_1779844974086.png';
 import { 
   auth, 
   db, 
@@ -1683,12 +1682,7 @@ export const GardenMap: React.FC = () => {
               <div className="relative">
                 <div className="w-16 h-16 border-t-2 border-emerald-500 rounded-full animate-spin" />
                 <div className="absolute inset-0 flex items-center justify-center">
-                  <img 
-                    src={loadingLeaf} 
-                    alt="Loading..." 
-                    referrerPolicy="no-referrer"
-                    className="w-10 h-10 object-contain animate-pulse"
-                  />
+                  <Leaf size={24} className="text-emerald-500 animate-pulse" />
                 </div>
               </div>
               <div className="flex items-baseline gap-1">
