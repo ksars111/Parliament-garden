@@ -159,6 +159,7 @@ const MapComponent: React.FC<MapComponentProps> = ({
   const canEditRef = useRef(canEdit);
   const onMarkerClickRef = useRef(onMarkerClick);
   const onClosePopupRef = useRef(onClosePopup);
+  const onUpdatePositionRef = useRef(onUpdatePosition);
   const markersRef = useRef(markers);
 
   useEffect(() => {
@@ -172,6 +173,10 @@ const MapComponent: React.FC<MapComponentProps> = ({
   useEffect(() => {
     onClosePopupRef.current = onClosePopup;
   }, [onClosePopup]);
+
+  useEffect(() => {
+    onUpdatePositionRef.current = onUpdatePosition;
+  }, [onUpdatePosition]);
 
   useEffect(() => {
     markersRef.current = markers;
@@ -491,8 +496,12 @@ const MapComponent: React.FC<MapComponentProps> = ({
         newMarker.on('dragend', () => {
           const lngLat = newMarker.getLngLat();
           updateMarkerZIndices();
-          onUpdatePosition({
-            ...marker,
+          
+          const latestMarker = markersRef.current.find(m => m.id === marker.id);
+          if (!latestMarker) return;
+
+          onUpdatePositionRef.current({
+            ...latestMarker,
             longitude: lngLat.lng,
             latitude: lngLat.lat
           });
