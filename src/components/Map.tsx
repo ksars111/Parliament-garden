@@ -445,7 +445,7 @@ const MapComponent: React.FC<MapComponentProps> = ({
         
         // Add label
         const label = document.createElement('div');
-        label.className = 'marker-label absolute left-full ml-1 tracking-tight top-1/2 -translate-y-1/2 text-white text-[11px] font-bold whitespace-nowrap pointer-events-none drop-shadow-[0_1px_1px_rgba(0,0,0,1)] z-50 transition-all duration-300';
+        label.className = 'marker-label absolute left-full ml-1 tracking-tight top-1/2 -translate-y-1/2 text-white text-[11px] font-bold whitespace-nowrap cursor-pointer drop-shadow-[0_1px_1px_rgba(0,0,0,1)] z-50 transition-all duration-300';
         label.style.textShadow = '0 0 3px rgba(0,0,0,0.9), 1px 1px 2px rgba(0,0,0,1)';
         label.textContent = marker.name;
         el.appendChild(label);
@@ -527,14 +527,16 @@ const MapComponent: React.FC<MapComponentProps> = ({
       <style>{`
         .marker-label {
           opacity: 0;
+          pointer-events: none;
           transition: opacity 0.3s cubic-bezier(0.4, 0, 0.2, 1);
         }
         .show-labels .marker-label {
           opacity: 1;
+          pointer-events: auto;
         }
         .marker-label.occluded {
           opacity: 0 !important;
-          pointer-events: none;
+          pointer-events: none !important;
         }
       `}</style>
 
