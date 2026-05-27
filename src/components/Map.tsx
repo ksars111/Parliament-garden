@@ -5,6 +5,7 @@ import { Leaf, Plus, Map as MapIcon, Info, List, Search, X, ChevronRight, Pencil
 import { PlantMarker, Snapshot } from '../types';
 import { PlantPopup } from './PlantPopup';
 import { motion, AnimatePresence } from 'motion/react';
+import loadingLeaf from '../assets/images/loading_leaf_1779844974086.png';
 import { 
   auth, 
   db, 
@@ -57,30 +58,6 @@ const getIcon = (type: string) => {
   if (type === 'tree') return TREE_ICON;
   if (type === 'plant') return PLANT_ICON;
   return LINK_ICON;
-};
-
-const OakLeaf: React.FC<{ size?: number; className?: string }> = ({ size = 24, className }) => {
-  return (
-    <svg
-      width={size}
-      height={size}
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="1.8"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      className={className}
-    >
-      <path d="M12 22v-4" />
-      <path d="M12 18c-1.2-0.5-2.2-1.2-2.5-2.2-0.4-1.2 0.4-2.2-0.3-3.2-0.8-1.2-2-1.5-1.7-2.8s1.5-1.8 1.5-3c0-0.8 0.6-1.5 1.5-1.5 1-1.2 2-0.8 2.5 0.5 0.5-1.3 1.5-1.7 2.5-0.5 0.9 0 1.5 0.7 1.5 1.5 0 1.2 1.2 1.7 1.5 3s-0.9 1.6-1.7 2.8c-0.7 1 0.1 2-0.3 3.2-0.3 1-1.3 1.7-2.5 2.2" />
-      <path d="M12 18V5" strokeWidth="1.2" opacity="0.6" />
-      <path d="M12 14.5l-2-1.5" strokeWidth="1" opacity="0.5" />
-      <path d="M12 12.5l2-1.5" strokeWidth="1" opacity="0.5" />
-      <path d="M12 10.5l-2-1.5" strokeWidth="1" opacity="0.5" />
-      <path d="M12 8.5l2-1.5" strokeWidth="1" opacity="0.5" />
-    </svg>
-  );
 };
 
 const generateVignetteGeoJSON = (centerLng: number, centerLat: number) => {
@@ -1706,7 +1683,12 @@ export const GardenMap: React.FC = () => {
               <div className="relative">
                 <div className="w-16 h-16 border-t-2 border-emerald-500 rounded-full animate-spin" />
                 <div className="absolute inset-0 flex items-center justify-center">
-                  <OakLeaf size={24} className="text-emerald-500 animate-pulse" />
+                  <img 
+                    src={loadingLeaf} 
+                    alt="Loading..." 
+                    referrerPolicy="no-referrer"
+                    className="w-10 h-10 object-contain animate-pulse"
+                  />
                 </div>
               </div>
               <div className="flex items-baseline gap-1">
