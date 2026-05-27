@@ -59,6 +59,30 @@ const getIcon = (type: string) => {
   return LINK_ICON;
 };
 
+const OakLeaf: React.FC<{ size?: number; className?: string }> = ({ size = 24, className }) => {
+  return (
+    <svg
+      width={size}
+      height={size}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.8"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      className={className}
+    >
+      <path d="M12 22v-4" />
+      <path d="M12 18c-1.2-0.5-2.2-1.2-2.5-2.2-0.4-1.2 0.4-2.2-0.3-3.2-0.8-1.2-2-1.5-1.7-2.8s1.5-1.8 1.5-3c0-0.8 0.6-1.5 1.5-1.5 1-1.2 2-0.8 2.5 0.5 0.5-1.3 1.5-1.7 2.5-0.5 0.9 0 1.5 0.7 1.5 1.5 0 1.2 1.2 1.7 1.5 3s-0.9 1.6-1.7 2.8c-0.7 1 0.1 2-0.3 3.2-0.3 1-1.3 1.7-2.5 2.2" />
+      <path d="M12 18V5" strokeWidth="1.2" opacity="0.6" />
+      <path d="M12 14.5l-2-1.5" strokeWidth="1" opacity="0.5" />
+      <path d="M12 12.5l2-1.5" strokeWidth="1" opacity="0.5" />
+      <path d="M12 10.5l-2-1.5" strokeWidth="1" opacity="0.5" />
+      <path d="M12 8.5l2-1.5" strokeWidth="1" opacity="0.5" />
+    </svg>
+  );
+};
+
 const generateVignetteGeoJSON = (centerLng: number, centerLat: number) => {
   const ringsCount = 18;
   const rStart = 0.14; // start fading at 140 meters (the main parliament gardens area is preserved fully lit)
@@ -1148,7 +1172,7 @@ export const GardenMap: React.FC = () => {
                   <div>
                     <h4 className="text-white font-medium text-sm mb-1">Interactive Map</h4>
                     <p className="text-gray-400 text-[11px] leading-relaxed">
-                      Explore our nursery and display gardens. Click and drag to pan, use scroll to zoom. Hover over plants to see their names.
+                      Click and drag to pan, tilt and zoom.
                     </p>
                   </div>
                 </div>
@@ -1160,7 +1184,7 @@ export const GardenMap: React.FC = () => {
                   <div>
                     <h4 className="text-white font-medium text-sm mb-1">Live GPS Tracking</h4>
                     <p className="text-gray-400 text-[11px] leading-relaxed">
-                      Use the compass icon in the bottom-right to show your current location in the garden. Perfect for finding your way to specific specimens.
+                      Use the compass icon in the bottom-right to show your current location.
                     </p>
                   </div>
                 </div>
@@ -1172,7 +1196,7 @@ export const GardenMap: React.FC = () => {
                   <div>
                     <h4 className="text-white font-medium text-sm mb-1">Dynamic Views</h4>
                     <p className="text-gray-400 text-[11px] leading-relaxed">
-                      Toggle between a flat blueprint view and a tilted perspective view using the 3D icon for a better sense of layout and height.
+                      Toggle between overhead and isometric angle or drag the map to your preferred tilt.
                     </p>
                   </div>
                 </div>
@@ -1196,7 +1220,7 @@ export const GardenMap: React.FC = () => {
                   <div>
                     <h4 className="text-white font-medium text-sm mb-1">Detailed Plant Profiles</h4>
                     <p className="text-gray-400 text-[11px] leading-relaxed">
-                      Click icons to open profile cards. These cards adapt to the shape of the plant's photo. You can expand photos to full-screen to see fine details.
+                      Click map icons or plant text labels to open info cards. Click the card or its expand icon to open the full detailed profile view. Photos can be zoomed to full-screen to see fine details.
                     </p>
                   </div>
                 </div>
@@ -1464,13 +1488,13 @@ export const GardenMap: React.FC = () => {
               </div>
               
               <div className="space-y-4 mb-8 max-h-[55vh] overflow-y-auto pr-2 custom-scrollbar">
-                <div className="p-4 bg-white/5 rounded-2xl border border-white/5 group hover:border-emerald-500/30 transition-colors">
+                 <div className="p-4 bg-white/5 rounded-2xl border border-white/5 group hover:border-emerald-500/30 transition-colors">
                   <div className="flex items-center gap-2 mb-2">
                     <Plus className="text-emerald-400" size={16} />
                     <h4 className="text-white font-bold text-[10px] uppercase tracking-widest">Adding Specimens</h4>
                   </div>
                   <p className="text-gray-400 text-[11px] leading-relaxed">
-                    New plants drop exactly at the <span className="text-white">center crosshair</span> of your screen. Pan the map so the crosshair is over the desired location before clicking "Add New Tree".
+                    New plants drop exactly at the <span className="text-white">red target reticle</span> in the center of your screen. Pan the map so the reticle is over the desired location before clicking "Add New Tree".
                   </p>
                 </div>
 
@@ -1480,7 +1504,7 @@ export const GardenMap: React.FC = () => {
                     <h4 className="text-white font-bold text-[10px] uppercase tracking-widest">Precise Positioning</h4>
                   </div>
                   <p className="text-gray-400 text-[11px] leading-relaxed">
-                    To prevent accidental moves on phones, icons are locked by default. Open a specimen's card and click <span className="text-white">Move</span> to enable dragging. Relocate the icon, then choose <span className="text-white">Save New Position</span> or <span className="text-white">Cancel</span>.
+                    To prevent accidental moves on phones, icons are locked by default. Click the <span className="text-white">Move</span> button directly on a specimen's popup card (next to Edit) to enable dragging. Relocate the icon, then choose <span className="text-white">Save New Position</span> or <span className="text-white">Cancel</span>.
                   </p>
                 </div>
 
@@ -1648,7 +1672,7 @@ export const GardenMap: React.FC = () => {
               </div>
               <h2 className="text-2xl font-semibold text-white mb-2">Enter Edit Mode?</h2>
               <p className="text-gray-400 mb-8 text-sm leading-relaxed">
-                You can add new plants and reposition existing ones securely. Dragging requires clicking "Move" first, which safeguards against accidental touch gestures on mobile.
+                Add new plants securely at the red target reticle and reposition existing ones. Dragging requires clicking the "Move" button on the card (next to "Edit"), protecting against accidental gestures on mobile.
               </p>
               <div className="flex flex-col gap-3">
                 <button 
@@ -1682,7 +1706,7 @@ export const GardenMap: React.FC = () => {
               <div className="relative">
                 <div className="w-16 h-16 border-t-2 border-emerald-500 rounded-full animate-spin" />
                 <div className="absolute inset-0 flex items-center justify-center">
-                  <Leaf size={24} className="text-emerald-500 animate-pulse" />
+                  <OakLeaf size={24} className="text-emerald-500 animate-pulse" />
                 </div>
               </div>
               <div className="flex items-baseline gap-1">
