@@ -35,6 +35,8 @@ export const PlantPopup: React.FC<PlantPopupProps> = ({
 }) => {
   const [name, setName] = useState(marker.name);
   const [botanicalName, setBotanicalName] = useState(marker.botanicalName || '');
+  const [alsoKnownAs, setAlsoKnownAs] = useState(marker.alsoKnownAs || '');
+  const [nativeTo, setNativeTo] = useState(marker.nativeTo || '');
   const [description, setDescription] = useState(marker.description);
   const [localImages, setLocalImages] = useState<PlantImage[]>(() => {
     const initImages: PlantImage[] = [];
@@ -70,6 +72,8 @@ export const PlantPopup: React.FC<PlantPopupProps> = ({
   React.useEffect(() => {
     setName(marker.name);
     setBotanicalName(marker.botanicalName || '');
+    setAlsoKnownAs(marker.alsoKnownAs || '');
+    setNativeTo(marker.nativeTo || '');
     setDescription(marker.description);
     const initImages: PlantImage[] = [];
     if (marker.imageUrl) {
@@ -96,6 +100,8 @@ export const PlantPopup: React.FC<PlantPopupProps> = ({
     if (
       name === marker.name &&
       botanicalName === (marker.botanicalName || '') &&
+      alsoKnownAs === (marker.alsoKnownAs || '') &&
+      nativeTo === (marker.nativeTo || '') &&
       description === marker.description &&
       currentHeroUrl === (marker.imageUrl || '') &&
       currentHeroLabel === (marker.imageLabel || '') &&
@@ -122,6 +128,8 @@ export const PlantPopup: React.FC<PlantPopupProps> = ({
         ...marker, 
         name, 
         botanicalName, 
+        alsoKnownAs,
+        nativeTo,
         description, 
         imageUrl: heroUrl, 
         imageLabel: heroLabel, 
@@ -137,7 +145,7 @@ export const PlantPopup: React.FC<PlantPopupProps> = ({
         clearTimeout(saveTimeoutRef.current);
       }
     };
-  }, [name, botanicalName, description, localImages, type, url, marker, onSave, canEdit]);
+  }, [name, botanicalName, alsoKnownAs, nativeTo, description, localImages, type, url, marker, onSave, canEdit]);
 
   // Reset zoom when switching images
   React.useEffect(() => {
@@ -340,6 +348,22 @@ export const PlantPopup: React.FC<PlantPopupProps> = ({
                   <p className="text-sm sm:text-xs md:text-sm italic text-zinc-600 line-clamp-2 sm:line-clamp-1 font-semibold leading-normal">{botanicalName}</p>
                 ) : (
                   <p className="text-sm sm:text-xs md:text-sm text-zinc-400 line-clamp-2 sm:line-clamp-1 leading-normal">No botanical name specified</p>
+                )}
+                {(alsoKnownAs || nativeTo) && (
+                  <div className="mt-1.5 flex flex-wrap gap-x-3 gap-y-0.5 text-[11px] sm:text-[10px] md:text-[11px] text-zinc-500">
+                    {alsoKnownAs && (
+                      <span className="leading-snug">
+                        <span className="font-semibold text-zinc-400 uppercase tracking-widest text-[9px] mr-1">AKA:</span> 
+                        {alsoKnownAs}
+                      </span>
+                    )}
+                    {nativeTo && (
+                      <span className="leading-snug">
+                        <span className="font-semibold text-zinc-400 uppercase tracking-widest text-[9px] mr-1">Native to:</span> 
+                        {nativeTo}
+                      </span>
+                    )}
+                  </div>
                 )}
               </div>
 
@@ -597,6 +621,24 @@ export const PlantPopup: React.FC<PlantPopupProps> = ({
                     />
                   </div>
                   <div className="space-y-1">
+                    <label className="text-[10px] font-bold uppercase tracking-wider text-zinc-400">Also known as</label>
+                    <input 
+                      value={alsoKnownAs} 
+                      onChange={(e) => setAlsoKnownAs(e.target.value)} 
+                      className="w-full text-xs text-zinc-600 bg-zinc-50 border border-zinc-200 rounded-xl px-3 py-2 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/10 transition-all outline-none" 
+                      placeholder="e.g. Japanese Maple, Smooth Japanese Maple" 
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <label className="text-[10px] font-bold uppercase tracking-wider text-zinc-400">Native to</label>
+                    <input 
+                      value={nativeTo} 
+                      onChange={(e) => setNativeTo(e.target.value)} 
+                      className="w-full text-xs text-zinc-600 bg-zinc-50 border border-zinc-200 rounded-xl px-3 py-2 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/10 transition-all outline-none" 
+                      placeholder="e.g. East Asia (Japan, China, Korea)" 
+                    />
+                  </div>
+                  <div className="space-y-1">
                     <label className="text-[10px] font-bold uppercase tracking-wider text-zinc-400">Description</label>
                     <textarea 
                       value={description} 
@@ -711,6 +753,18 @@ export const PlantPopup: React.FC<PlantPopupProps> = ({
                           )}
                         </h3>
                         {botanicalName && <p className="text-sm italic text-gray-500 mt-0.5">{botanicalName}</p>}
+                        {alsoKnownAs && (
+                          <p className="text-xs text-gray-400 mt-1">
+                            <span className="font-bold uppercase tracking-wider text-[9px] mr-1 text-gray-300">Also known as:</span>
+                            {alsoKnownAs}
+                          </p>
+                        )}
+                        {nativeTo && (
+                          <p className="text-xs text-gray-400 mt-0.5">
+                            <span className="font-bold uppercase tracking-wider text-[9px] mr-1 text-gray-300">Native to:</span>
+                            {nativeTo}
+                          </p>
+                        )}
                       </div>
                       <span className={`text-[10px] font-bold uppercase tracking-widest px-2.5 py-1 rounded-md ${
                         type === 'tree' ? 'bg-green-100 text-green-700' : 
@@ -882,6 +936,18 @@ export const PlantPopup: React.FC<PlantPopupProps> = ({
                     <div>
                       <h2 className="text-4xl font-bold text-gray-900 leading-tight tracking-tight">{name || 'Unnamed Plant'}</h2>
                       {botanicalName && <p className="text-xl text-emerald-600 italic mt-1 font-medium">{botanicalName}</p>}
+                      {alsoKnownAs && (
+                        <p className="text-sm text-gray-500 mt-2 font-medium">
+                          <span className="font-bold text-gray-400 text-xs uppercase tracking-widest mr-1.5">Also known as:</span>
+                          {alsoKnownAs}
+                        </p>
+                      )}
+                      {nativeTo && (
+                        <p className="text-sm text-gray-500 mt-1 font-medium">
+                          <span className="font-bold text-gray-400 text-xs uppercase tracking-widest mr-1.5">Native to:</span>
+                          {nativeTo}
+                        </p>
+                      )}
                       <span className={`inline-block mt-6 text-[10px] font-bold uppercase tracking-[0.2em] px-3.5 py-1.5 rounded-full ${marker.type === 'tree' ? 'bg-green-100 text-green-700' : 'bg-pink-100 text-pink-600'}`}>{marker.type}</span>
                     </div>
                     <button onClick={() => setIsModalOpen(false)} className="hidden md:flex p-2 hover:bg-gray-100 rounded-full text-gray-300 hover:text-gray-600 transition-colors"><X size={28} /></button>

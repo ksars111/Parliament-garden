@@ -17,6 +17,8 @@ export interface PlantMarker {
   createdAt: number;
   type: 'tree' | 'plant' | 'link';
   url?: string;
+  alsoKnownAs?: string;
+  nativeTo?: string;
 }
 
 export interface Snapshot {
