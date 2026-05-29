@@ -5,6 +5,17 @@ import { PlantMarker, PlantImage } from '../types';
 import { motion, AnimatePresence, Reorder } from 'motion/react';
 import { uploadImage } from '../lib/cloudinary';
 
+const optimizeCloudinaryUrl = (url: string, size = 1600): string => {
+  if (!url) return '';
+  if (url.includes('res.cloudinary.com') && url.includes('/upload/')) {
+    if (!url.includes('/f_auto,q_auto')) {
+      const transform = `f_auto,q_auto,w_${size},h_${size},c_limit`;
+      return url.replace('/upload/', `/upload/${transform}/`);
+    }
+  }
+  return url;
+};
+
 interface PlantPopupProps {
   marker: PlantMarker;
   onSave: (updated: PlantMarker) => void;
@@ -291,7 +302,7 @@ export const PlantPopup: React.FC<PlantPopupProps> = ({
             >
               {allImages.length > 0 ? (
                 <img 
-                  src={allImages[0].url} 
+                  src={optimizeCloudinaryUrl(allImages[0].url, 400)} 
                   alt={name} 
                   className="w-full h-full object-cover group-hover/thumb:scale-110 transition-transform duration-300" 
                   referrerPolicy="no-referrer"
@@ -432,10 +443,10 @@ export const PlantPopup: React.FC<PlantPopupProps> = ({
                       {/* Premium blurred ambient background to pad different aspect ratios */}
                       <div 
                         className="absolute inset-0 bg-cover bg-center scale-115 blur-xl opacity-35 select-none pointer-events-none"
-                        style={{ backgroundImage: `url(${allImages[currentImageIndex].url})` }}
+                        style={{ backgroundImage: `url(${optimizeCloudinaryUrl(allImages[currentImageIndex].url, 200)})` }}
                       />
                       <img 
-                        src={allImages[currentImageIndex].url} 
+                        src={optimizeCloudinaryUrl(allImages[currentImageIndex].url, 1000)} 
                         alt={name} 
                         onLoad={(e) => handleImageLoad(allImages[currentImageIndex].url, e)}
                         className={`relative z-10 w-full h-full object-contain transition-opacity duration-300 ${isUploading ? 'opacity-50' : 'opacity-100'}`}
@@ -625,7 +636,7 @@ export const PlantPopup: React.FC<PlantPopupProps> = ({
                               className="relative group/thumb shrink-0 cursor-grab active:cursor-grabbing"
                             >
                               <div className={`w-12 h-12 rounded-lg overflow-hidden border-2 transition-colors ${idx === 0 ? 'border-emerald-500 shadow-sm' : 'border-gray-100'}`}>
-                                <img src={img.url} alt="" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+                                <img src={optimizeCloudinaryUrl(img.url, 200)} alt="" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
                               </div>
                               
                               {idx === 0 && (
@@ -775,23 +786,23 @@ export const PlantPopup: React.FC<PlantPopupProps> = ({
                 ref={imageContainerRef}
               >
                 <div className="flex-1 relative flex items-center justify-center overflow-hidden">
-                  <AnimatePresence mode="wait">
+                  <AnimatePresence>
                     {allImages.length > 0 ? (
                       <motion.div
                         key={allImages[currentImageIndex].url}
-                        initial={{ opacity: 0, scale: 1.1 }}
+                        initial={{ opacity: 0, scale: 1.05 }}
                         animate={{ opacity: 1, scale: 1 }}
-                        exit={{ opacity: 0, scale: 0.9 }}
-                        transition={{ duration: 0.4 }}
-                        className="w-full h-full relative"
+                        exit={{ opacity: 0, scale: 0.95 }}
+                        transition={{ duration: 0.3 }}
+                        className="absolute inset-0 w-full h-full flex items-center justify-center overflow-hidden"
                       >
                         {/* Premium blurred ambient background for full screen slideshow details */}
                         <div 
                           className="absolute inset-0 bg-cover bg-center scale-110 blur-2xl opacity-25 select-none pointer-events-none"
-                          style={{ backgroundImage: `url(${allImages[currentImageIndex].url})` }}
+                          style={{ backgroundImage: `url(${optimizeCloudinaryUrl(allImages[currentImageIndex].url, 200)})` }}
                         />
                         <motion.img 
-                          src={allImages[currentImageIndex].url} 
+                          src={optimizeCloudinaryUrl(allImages[currentImageIndex].url, 1600)} 
                           alt={name} 
                           style={{ scale: zoomScale, x: zoomPosition.x, y: zoomPosition.y, cursor: zoomScale > 1 ? 'grab' : 'default' }}
                           drag={zoomScale > 1}
@@ -851,7 +862,7 @@ export const PlantPopup: React.FC<PlantPopupProps> = ({
                   <div className="h-24 bg-black/20 backdrop-blur-md p-4 flex gap-3 overflow-x-auto custom-scrollbar shrink-0">
                     {allImages.map((img, idx) => (
                       <button key={idx} onClick={(e) => { e.stopPropagation(); setCurrentImageIndex(idx); }} className={`relative shrink-0 w-16 h-16 rounded-xl overflow-hidden border-2 transition-all ${idx === currentImageIndex ? 'border-emerald-500 scale-105 shadow-lg shadow-emerald-500/20' : 'border-transparent opacity-50 hover:opacity-100'}`}>
-                        <img src={img.url} alt="" className="w-full h-full object-cover" />
+                        <img src={optimizeCloudinaryUrl(img.url, 200)} alt="" className="w-full h-full object-cover" />
                       </button>
                     ))}
                   </div>
@@ -890,6 +901,19 @@ export const PlantPopup: React.FC<PlantPopupProps> = ({
       </AnimatePresence>,
       document.body
     )}
+
+      {/* Invisible Preload Bridge for Flawless Carousel & Modal Performance */}
+      <div className="hidden" aria-hidden="true" style={{ width: 0, height: 0, position: 'absolute', overflow: 'hidden' }}>
+        {allImages.map((img) => (
+          <React.Fragment key={img.url}>
+            <img src={optimizeCloudinaryUrl(img.url, 200)} alt="" referrerPolicy="no-referrer" />
+            <img src={optimizeCloudinaryUrl(img.url, 400)} alt="" referrerPolicy="no-referrer" />
+            <img src={optimizeCloudinaryUrl(img.url, 800)} alt="" referrerPolicy="no-referrer" />
+            <img src={optimizeCloudinaryUrl(img.url, 1000)} alt="" referrerPolicy="no-referrer" />
+            <img src={optimizeCloudinaryUrl(img.url, 1600)} alt="" referrerPolicy="no-referrer" />
+          </React.Fragment>
+        ))}
+      </div>
 
       <input ref={fileInputRef} type="file" accept="image/*" onChange={handleFileChange} className="hidden" />
     </>
