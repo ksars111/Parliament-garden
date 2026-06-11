@@ -803,6 +803,12 @@ export const GardenMap: React.FC = () => {
     setIsUnlocked(true);
     sessionStorage.setItem('garden_unlocked', 'true');
     setShowUnlockConfirm(false);
+    
+    const hasEnteredBefore = localStorage.getItem('garden_has_entered_edit_mode') === 'true';
+    if (!hasEnteredBefore) {
+      setShowInstructions(true);
+      localStorage.setItem('garden_has_entered_edit_mode', 'true');
+    }
   };
 
   const handleLockEditing = () => {
