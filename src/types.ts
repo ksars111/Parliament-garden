@@ -21,10 +21,4 @@ export interface PlantMarker {
   nativeTo?: string;
 }
 
-export interface Snapshot {
-  id: string;
-  uid: string;
-  name: string;
-  createdAt: number;
-  markers: PlantMarker[];
-}
+

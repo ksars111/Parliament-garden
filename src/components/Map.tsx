@@ -2,7 +2,7 @@ import React, { useState, useCallback, useEffect, useRef } from 'react';
 import maplibregl from 'maplibre-gl';
 import 'maplibre-gl/dist/maplibre-gl.css';
 import { Leaf, Plus, Map as MapIcon, Info, List, Search, X, ChevronRight, Pencil, ShieldCheck, AlertCircle, Home, Rotate3d, Trash2, Undo, History, Camera, Trash, Clock, Navigation, Tag, GripVertical, Save, HelpCircle, ExternalLink, Link } from 'lucide-react';
-import { PlantMarker, Snapshot } from '../types';
+import { PlantMarker } from '../types';
 import { PlantPopup } from './PlantPopup';
 import { motion, AnimatePresence } from 'motion/react';
 import { 
@@ -578,9 +578,6 @@ export const GardenMap: React.FC = () => {
   const [showInstructions, setShowInstructions] = useState(false);
   const [showLegend, setShowLegend] = useState(false);
   const [lastMove, setLastMove] = useState<{ id: string; prevPos: { lng: number; lat: number } } | null>(null);
-  const [snapshots, setSnapshots] = useState<Snapshot[]>([]);
-  const [showSnapshots, setShowSnapshots] = useState(false);
-  const [isSavingSnapshot, setIsSavingSnapshot] = useState(false);
   const [isDataLoading, setIsDataLoading] = useState(true);
   const [isQuotaExceeded, setIsQuotaExceeded] = useState(false);
   const [isWriteQuotaExceeded, setIsWriteQuotaExceeded] = useState(false);
@@ -787,22 +784,8 @@ export const GardenMap: React.FC = () => {
       fetchInitialData();
     }
 
-    // Sync snapshots for the user
-    let unsubscribeSnapshots: (() => void) | null = null;
-    if (isUnlocked && auth.currentUser) {
-      const q = query(collection(db, 'snapshots'));
-      unsubscribeSnapshots = onSnapshot(q, (snapshot) => {
-        const docs = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Snapshot));
-        setSnapshots(docs.sort((a, b) => b.createdAt - a.createdAt));
-      }, (error) => {
-        // Silent error for snapshots if it fails (likely rules)
-        console.warn("Snapshot sync failed:", error);
-      });
-    }
-
     return () => {
       if (unsubscribe) unsubscribe();
-      if (unsubscribeSnapshots) unsubscribeSnapshots();
     };
   }, [isUnlocked, isAuthenticating]);
 
@@ -1006,50 +989,7 @@ export const GardenMap: React.FC = () => {
     }
   }, [canEdit, markers]);
 
-  const createSnapshot = async () => {
-    if (!auth.currentUser || markers.length === 0) return;
-    setIsSavingSnapshot(true);
-    try {
-      const snapshotId = `snapshot_${Date.now()}`;
-      const newSnapshot: Snapshot = {
-        id: snapshotId,
-        uid: auth.currentUser.uid,
-        name: `Garden Backup (${new Date().toLocaleDateString()})`,
-        createdAt: Date.now(),
-        markers: markers
-      };
-      await setDoc(doc(db, 'snapshots', snapshotId), newSnapshot);
-      setSaveError(null);
-    } catch (e) {
-      console.error("Failed to create snapshot:", e);
-      setSaveError("Failed to save backup.");
-    } finally {
-      setIsSavingSnapshot(false);
-    }
-  };
 
-  const restoreSnapshot = async (snapshot: Snapshot) => {
-    if (!canEdit || !auth.currentUser || !window.confirm(`Restore "${snapshot.name}"? This will overwrite your current garden layout.`)) return;
-    
-    try {
-      await setDoc(doc(db, 'garden', 'data'), {
-        markers: snapshot.markers
-      });
-      setSaveError(null);
-      setShowSnapshots(false);
-    } catch (e) {
-      setSaveError("Failed to restore backup.");
-    }
-  };
-
-  const deleteSnapshot = async (id: string) => {
-    if (!auth.currentUser) return;
-    try {
-      await deleteDoc(doc(db, 'snapshots', id));
-    } catch (e) {
-      console.error("Failed to delete snapshot:", e);
-    }
-  };
 
   const clearAllPhotos = async () => {
     if (!canEdit || !auth.currentUser || !window.confirm("Are you sure you want to delete ALL photos from ALL markers? This cannot be undone.")) return;
@@ -1265,13 +1205,7 @@ export const GardenMap: React.FC = () => {
               <Info size={18} strokeWidth={1.5} />
               <span className="text-[10px] font-bold uppercase tracking-wider">Instructions</span>
             </button>
-            <button 
-              onClick={() => setShowSnapshots(true)}
-              className="h-10 px-4 bg-white/5 hover:bg-white/10 backdrop-blur-md border border-white/10 rounded-full flex items-center gap-2 text-white/60 hover:text-white transition-all active:scale-95 shadow-lg"
-            >
-              <History size={18} strokeWidth={1.5} />
-              <span className="text-[10px] font-bold uppercase tracking-wider">Backups</span>
-            </button>
+
           </div>
         )}
       </div>
@@ -1503,15 +1437,7 @@ export const GardenMap: React.FC = () => {
                   </p>
                 </div>
 
-                <div className="p-4 bg-white/5 rounded-2xl border border-white/5 group hover:border-pink-500/30 transition-colors">
-                  <div className="flex items-center gap-2 mb-2">
-                    <History className="text-pink-400" size={16} />
-                    <h4 className="text-white font-bold text-[10px] uppercase tracking-widest">Version Control</h4>
-                  </div>
-                  <p className="text-gray-400 text-[11px] leading-relaxed">
-                    The <span className="text-white">Backups</span> panel allows you to snapshot the entire garden state. Restore any snapshot to instantly undo mass deletions or unintended changes.
-                  </p>
-                </div>
+
 
                 <div className="p-4 bg-white/5 rounded-2xl border border-white/5 group hover:border-blue-400/30 transition-colors">
                   <div className="flex items-center gap-2 mb-2">
@@ -1545,102 +1471,7 @@ export const GardenMap: React.FC = () => {
         )}
       </AnimatePresence>
 
-      {/* Snapshots / Backups Popup */}
-      <AnimatePresence>
-        {showSnapshots && (
-          <div className="absolute inset-0 z-[9000] flex items-center justify-center p-4 bg-black/60 backdrop-blur-md">
-            <motion.div
-              initial={{ opacity: 0, scale: 0.9, y: 20 }}
-              animate={{ opacity: 1, scale: 1, y: 0 }}
-              exit={{ opacity: 0, scale: 0.9, y: 20 }}
-              className="bg-zinc-900 border border-white/10 p-8 rounded-[32px] shadow-2xl max-w-lg w-full relative overflow-hidden flex flex-col max-h-[80vh]"
-            >
-              <div className="flex items-center justify-between mb-8">
-                <div>
-                  <h2 className="text-2xl font-bold text-white tracking-tight">Garden Backups</h2>
-                  <p className="text-gray-400 text-xs mt-1">Revert to older versions of your garden map.</p>
-                </div>
-                <button 
-                  onClick={() => setShowSnapshots(false)}
-                  className="p-2 hover:bg-white/5 rounded-full text-white/40 hover:text-white transition-colors"
-                >
-                  <X size={20} />
-                </button>
-              </div>
 
-              <div className="flex-1 overflow-y-auto custom-scrollbar mb-8 space-y-3 pr-2">
-                <button
-                  onClick={createSnapshot}
-                  disabled={isSavingSnapshot || markers.length === 0}
-                  className="w-full p-4 bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/20 rounded-2xl flex items-center justify-between group transition-all"
-                >
-                  <div className="flex items-center gap-4">
-                    <div className="w-10 h-10 bg-emerald-500/20 rounded-xl flex items-center justify-center">
-                      <Camera className="text-emerald-500" size={20} />
-                    </div>
-                    <div className="text-left">
-                      <span className="text-white font-bold text-sm block">Create New Backup</span>
-                      <span className="text-[10px] text-emerald-500/60 uppercase tracking-widest font-bold">Snapshot Current View</span>
-                    </div>
-                  </div>
-                  {isSavingSnapshot ? (
-                    <div className="w-5 h-5 border-t-2 border-emerald-500 rounded-full animate-spin" />
-                  ) : (
-                    <Plus className="text-emerald-500 group-hover:scale-125 transition-transform" size={20} />
-                  )}
-                </button>
-
-                <div className="h-px bg-white/5 my-6" />
-
-                {snapshots.length === 0 ? (
-                  <div className="text-center py-12">
-                    <History className="text-white/10 mx-auto mb-4" size={48} />
-                    <p className="text-white/30 text-sm italic">No backups found yet.</p>
-                  </div>
-                ) : (
-                  snapshots.map((snap) => (
-                    <div 
-                      key={snap.id}
-                      className="p-4 bg-white/5 border border-white/5 rounded-2xl flex items-center justify-between group hover:border-white/10 transition-all"
-                    >
-                      <div className="flex items-center gap-4">
-                        <div className="w-10 h-10 bg-white/5 rounded-xl flex items-center justify-center">
-                          <Clock className="text-gray-400" size={18} />
-                        </div>
-                        <div className="text-left">
-                          <span className="text-white font-medium text-sm block truncate max-w-[180px]">{snap.name}</span>
-                          <span className="text-[10px] text-gray-500 font-mono">
-                            {new Date(snap.createdAt).toLocaleString()} • {snap.markers.length} items
-                          </span>
-                        </div>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <button
-                          onClick={() => restoreSnapshot(snap)}
-                          className="px-4 py-2 bg-emerald-500 hover:bg-emerald-600 text-white text-[10px] font-bold uppercase tracking-wider rounded-xl transition-all active:scale-95"
-                        >
-                          Restore
-                        </button>
-                        <button
-                          onClick={() => deleteSnapshot(snap.id)}
-                          className="p-2 hover:bg-red-500/10 text-white/20 hover:text-red-500 rounded-xl transition-all"
-                        >
-                          <Trash size={16} />
-                        </button>
-                      </div>
-                    </div>
-                  ))
-                )}
-              </div>
-
-              <div className="p-4 bg-emerald-500/5 rounded-2xl border border-emerald-500/10 text-[10px] leading-relaxed text-emerald-500/70">
-                <span className="font-bold uppercase tracking-widest block mb-1">Backup Strategy</span>
-                Each backup saves all coordinates, names, and photo links. Restoring a backup will replace your current garden map with the version saved at that time.
-              </div>
-            </motion.div>
-          </div>
-        )}
-      </AnimatePresence>
 
       {/* Unlock Confirmation Popup */}
       <AnimatePresence>
