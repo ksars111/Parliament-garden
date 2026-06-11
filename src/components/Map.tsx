@@ -1492,10 +1492,7 @@ export const GardenMap: React.FC = () => {
               <div className="w-16 h-16 bg-emerald-500/20 rounded-full flex items-center justify-center mx-auto mb-6">
                 <Pencil className="text-emerald-500" size={32} />
               </div>
-              <h2 className="text-2xl font-semibold text-white mb-2">Enter Edit Mode?</h2>
-              <p className="text-gray-400 mb-8 text-sm leading-relaxed">
-                Add new plants securely at the red target reticle and reposition existing ones. Dragging requires clicking the "Move" button on the card (next to "Edit"), protecting against accidental gestures on mobile.
-              </p>
+              <h2 className="text-2xl font-semibold text-white mb-6">Enter Edit Mode?</h2>
               <div className="flex flex-col gap-3">
                 <button 
                   onClick={handleUnlockEditing}
